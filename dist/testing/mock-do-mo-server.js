@@ -169,6 +169,26 @@ export class MockDoMoServer {
                 return this.isAuthority(session, init) ? this.answerQuestion(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "tool")
                 return this.isAuthority(session, init) ? this.executeTool(session, bodyObject(init)) : errorResponse(403, "authority required");
+            if (method === "POST" && tail[0] === "fork")
+                return this.fork(session);
+            if (method === "POST" && tail[0] === "clone")
+                return this.fork(session);
+            if (method === "POST" && tail[0] === "rename") {
+                const name = bodyObject(init).name;
+                if (typeof name === "string")
+                    session.summary.name = name;
+                else if (name === null)
+                    delete session.summary.name;
+                return jsonResponse({});
+            }
+            if (method === "POST" && tail[0] === "title")
+                return jsonResponse({ title: session.summary.name ?? "Mock session" });
+            if (method === "POST" && tail[0] === "label")
+                return jsonResponse({});
+            if (method === "POST" && tail[0] === "leaf")
+                return jsonResponse({});
+            if (method === "POST" && tail[0] === "diff" && tail[1] === "commit-message")
+                return jsonResponse({ message: "Mock commit message" });
             if (method === "POST" && tail[0] === "client" && tail[1] === "attach")
                 return this.attach(session, bodyObject(init));
             if (method === "POST" && tail[0] === "client" && tail[1] === "detach")
@@ -317,6 +337,9 @@ export class MockDoMoServer {
         const toolName = command.split(/\s+/, 1)[0] ?? "unknown";
         this.emit(session.ref.id, { type: "tool_start", id: uuidv7(), name: toolName, arguments: {} });
         return jsonResponse({ toolName, output: `mock ${command}`, isError: false, imageCount: 0 });
+    }
+    async fork(_session) {
+        return jsonResponse(await this.createSession(), 201);
     }
     attach(session, body) {
         const clientId = typeof body.clientID === "string" ? body.clientID : uuidv7();

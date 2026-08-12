@@ -62,6 +62,7 @@ export declare class MockDoMoServer {
     private answerPermission;
     private answerQuestion;
     private executeTool;
+    private fork;
     private attach;
     private detach;
     private tools;

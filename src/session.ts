@@ -135,6 +135,34 @@ export class SessionHandle {
   async setModel(modelId: string): Promise<void> { await this.client.transport.json(sessionPath(this.id, "/model"), { method: "POST", body: { modelID: modelId } }); }
   async setMode(mode: string): Promise<void> { await this.client.transport.json(sessionPath(this.id, "/mode"), { method: "POST", body: { mode } }); }
 
+  async fork(options: SessionAttachOptions = {}): Promise<SessionHandle> {
+    const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/fork"), { method: "POST", expectedStatus: 201 });
+    const ref = decodeRef(value, { id: "", path: "" });
+    const handle = this.client.sessions.getOrCreate(ref);
+    await handle.attach(options);
+    return handle;
+  }
+
+  async clone(options: SessionAttachOptions = {}): Promise<SessionHandle> {
+    const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/clone"), { method: "POST", expectedStatus: 201 });
+    const ref = decodeRef(value, { id: "", path: "" });
+    const handle = this.client.sessions.getOrCreate(ref);
+    await handle.attach(options);
+    return handle;
+  }
+
+  async rename(name: string | null): Promise<void> { await this.client.transport.json(sessionPath(this.id, "/rename"), { method: "POST", body: { name } }); }
+  async autoTitle(): Promise<string | undefined> {
+    const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/title"), { method: "POST" });
+    return isRecord(value) && typeof value.title === "string" ? value.title : undefined;
+  }
+  async setLabel(targetId: string, label: string | null): Promise<void> { await this.client.transport.json(sessionPath(this.id, "/label"), { method: "POST", body: { targetID: targetId, label } }); }
+  async moveLeaf(targetId: string | null): Promise<void> { await this.client.transport.json(sessionPath(this.id, "/leaf"), { method: "POST", body: { targetID: targetId } }); }
+  async commitMessage(): Promise<string | undefined> {
+    const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/diff/commit-message"), { method: "POST" });
+    return isRecord(value) && typeof value.message === "string" ? value.message : undefined;
+  }
+
   async tools(): Promise<unknown[]> { const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/tools")); return requiredArray(value, "tools"); }
 
   async settled(options: SettleOptions = {}): Promise<SettleResult> {

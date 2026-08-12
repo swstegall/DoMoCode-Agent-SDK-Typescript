@@ -122,6 +122,31 @@ export class SessionHandle {
     }
     async setModel(modelId) { await this.client.transport.json(sessionPath(this.id, "/model"), { method: "POST", body: { modelID: modelId } }); }
     async setMode(mode) { await this.client.transport.json(sessionPath(this.id, "/mode"), { method: "POST", body: { mode } }); }
+    async fork(options = {}) {
+        const value = await this.client.transport.json(sessionPath(this.id, "/fork"), { method: "POST", expectedStatus: 201 });
+        const ref = decodeRef(value, { id: "", path: "" });
+        const handle = this.client.sessions.getOrCreate(ref);
+        await handle.attach(options);
+        return handle;
+    }
+    async clone(options = {}) {
+        const value = await this.client.transport.json(sessionPath(this.id, "/clone"), { method: "POST", expectedStatus: 201 });
+        const ref = decodeRef(value, { id: "", path: "" });
+        const handle = this.client.sessions.getOrCreate(ref);
+        await handle.attach(options);
+        return handle;
+    }
+    async rename(name) { await this.client.transport.json(sessionPath(this.id, "/rename"), { method: "POST", body: { name } }); }
+    async autoTitle() {
+        const value = await this.client.transport.json(sessionPath(this.id, "/title"), { method: "POST" });
+        return isRecord(value) && typeof value.title === "string" ? value.title : undefined;
+    }
+    async setLabel(targetId, label) { await this.client.transport.json(sessionPath(this.id, "/label"), { method: "POST", body: { targetID: targetId, label } }); }
+    async moveLeaf(targetId) { await this.client.transport.json(sessionPath(this.id, "/leaf"), { method: "POST", body: { targetID: targetId } }); }
+    async commitMessage() {
+        const value = await this.client.transport.json(sessionPath(this.id, "/diff/commit-message"), { method: "POST" });
+        return isRecord(value) && typeof value.message === "string" ? value.message : undefined;
+    }
     async tools() { const value = await this.client.transport.json(sessionPath(this.id, "/tools")); return requiredArray(value, "tools"); }
     async settled(options = {}) {
         const idle = options.maxIdleMs ?? 5_000;

@@ -55,6 +55,13 @@ export declare class SessionHandle {
     context(): Promise<ContextSnapshot>;
     setModel(modelId: string): Promise<void>;
     setMode(mode: string): Promise<void>;
+    fork(options?: SessionAttachOptions): Promise<SessionHandle>;
+    clone(options?: SessionAttachOptions): Promise<SessionHandle>;
+    rename(name: string | null): Promise<void>;
+    autoTitle(): Promise<string | undefined>;
+    setLabel(targetId: string, label: string | null): Promise<void>;
+    moveLeaf(targetId: string | null): Promise<void>;
+    commitMessage(): Promise<string | undefined>;
     tools(): Promise<unknown[]>;
     settled(options?: SettleOptions): Promise<SettleResult>;
     run(prompt: string, options?: PromptOptions & SettleOptions): Promise<RunResult>;
