@@ -7,7 +7,7 @@ import { decodeServerEvent } from "../src/types/events.ts";
 const fixture = (name: string) => join(process.cwd(), "testing", "fixtures", name);
 
 test("golden fixtures decode and future frames remain observable", async () => {
-  const names = ["connected.json", "permission-request.json", "question-request.json", "message-end.json", "future-frame.json"];
+  const names = ["connected.json", "permission-request.json", "question-request.json", "message-end.json", "client-tool-request.json", "client-tool-resolved.json", "future-frame.json"];
   for (const name of names) {
     const value = JSON.parse(await readFile(fixture(name), "utf8")) as unknown;
     assert.doesNotThrow(() => decodeServerEvent(value));
