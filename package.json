@@ -45,8 +45,9 @@
     "check:source": "node scripts/check-source-imports.mjs",
     "check:package": "node scripts/check-package.mjs",
     "check:fixtures": "node scripts/check-fixtures.mjs",
+    "check:docs": "node scripts/check-doc-links.mjs",
     "check:dist": "npm run build && git diff --exit-code -- dist",
-    "check": "npm run check:source && npm run check:package && npm run check:fixtures && npm run generate:check && npm run typecheck"
+    "check": "npm run check:source && npm run check:package && npm run check:fixtures && npm run check:docs && npm run generate:check && npm run typecheck"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
