@@ -61,7 +61,7 @@ export async function authorizeRemoteOAuth(configuration, options = {}) {
         if (callback.state !== state)
             throw new OAuthFlowError("OAuth callback state did not match.", "state_mismatch");
         if (callback.error) {
-            throw new OAuthFlowError(`The authorization server denied access${callback.errorDescription ? `: ${sanitizeOAuthText(callback.errorDescription)}` : "."}`, sanitizeOAuthText(callback.error));
+            throw new OAuthFlowError("The authorization server denied access.", safeProviderErrorCode(callback.error));
         }
         if (!callback.code)
             throw new OAuthFlowError("OAuth callback did not contain an authorization code.", "missing_code");
@@ -106,7 +106,7 @@ export async function resolveOAuthConfiguration(configuration, options = {}) {
 /** The discovery chain is exported so browser hosts can run it before choosing a redirect UX. */
 export async function discoverOAuth(serverURL, options = {}) {
     const fetchFunction = options.fetch ?? defaultFetch;
-    const server = new URL(serverURL);
+    const server = httpURL(serverURL, "OAuth serverUrl");
     let challenge = options.wwwAuthenticate;
     if (challenge === undefined) {
         const response = await fetchOptional(fetchFunction, server, options.signal);
@@ -208,6 +208,7 @@ async function registerClient(configuration, redirectUri, fetchFunction, signal,
     if (!configuration.registrationEndpoint) {
         throw new OAuthFlowError("The authorization server does not offer dynamic client registration; configure clientId.", "client_registration_required");
     }
+    const registrationURL = httpURL(configuration.registrationEndpoint, "OAuth registration endpoint");
     const body = {
         redirect_uris: [redirectUri],
         token_endpoint_auth_method: "none",
@@ -216,7 +217,7 @@ async function registerClient(configuration, redirectUri, fetchFunction, signal,
         client_name: clientName,
         ...(configuration.scope === undefined ? {} : { scope: configuration.scope })
     };
-    const response = await fetchFunction(configuration.registrationEndpoint, {
+    const response = await fetchFunction(registrationURL, {
         method: "POST",
         headers: { accept: "application/json", "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -239,7 +240,7 @@ function buildAuthorizationURL(configuration, clientId, redirectUri, challenge, 
     if (configuration.codeChallengeMethodsSupported && !configuration.codeChallengeMethodsSupported.some((method) => method.toUpperCase() === "S256")) {
         throw new OAuthFlowError("The authorization server does not advertise S256 PKCE support.", "pkce_required");
     }
-    const url = new URL(configuration.authorizationEndpoint);
+    const url = httpURL(configuration.authorizationEndpoint, "OAuth authorization endpoint");
     url.searchParams.set("response_type", "code");
     url.searchParams.set("client_id", clientId);
     url.searchParams.set("redirect_uri", redirectUri);
@@ -276,7 +277,7 @@ async function exchangeAuthorizationCode(configuration, client, code, redirectUr
 async function postTokenForm(endpoint, fields, fetchFunction) {
     if (!endpoint)
         throw new OAuthFlowError("OAuth token endpoint is missing.", "configuration");
-    const response = await fetchFunction(endpoint, {
+    const response = await fetchFunction(httpURL(endpoint, "OAuth token endpoint"), {
         method: "POST",
         headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams(fields).toString()
@@ -309,8 +310,10 @@ async function readJSON(response) {
 }
 function oauthHTTPError(prefix, status, value) {
     const code = isRecord(value) && typeof value.error === "string" ? sanitizeOAuthText(value.error) : undefined;
-    const description = isRecord(value) && typeof value.error_description === "string" ? sanitizeOAuthText(value.error_description) : undefined;
-    return new OAuthFlowError(`${prefix} (HTTP ${status})${description ? `: ${description}` : ""}.`, code);
+    // Provider error descriptions are untrusted text and can echo a code,
+    // verifier, or token. Keep the error actionable by status while excluding
+    // the provider's body from both the message and the exposed error code.
+    return new OAuthFlowError(`${prefix} (HTTP ${status}).`, code === undefined ? undefined : safeProviderErrorCode(code));
 }
 async function fetchOptional(fetchFunction, url, signal) {
     try {
@@ -412,7 +415,7 @@ function stringArray(value) {
     return result.length === value.length ? result : undefined;
 }
 function canonicalResource(serverURL) {
-    const url = new URL(serverURL);
+    const url = httpURL(serverURL, "OAuth serverUrl");
     url.protocol = url.protocol.toLowerCase();
     url.hostname = url.hostname.toLowerCase();
     url.hash = "";
@@ -483,6 +486,24 @@ async function raceWithAbort(promise, signal) {
 }
 function sanitizeOAuthText(value) {
     return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 300);
+}
+function httpURL(value, field) {
+    let url;
+    try {
+        url = new URL(value);
+    }
+    catch {
+        throw new OAuthFlowError(`${field} is not a valid URL.`, "configuration");
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:")
+        throw new OAuthFlowError(`${field} must use HTTP or HTTPS.`, "configuration");
+    return url;
+}
+function safeProviderErrorCode(value) {
+    const normalized = sanitizeOAuthText(value).toLowerCase();
+    return /^(access_denied|invalid_grant|invalid_request|invalid_client|invalid_scope|unauthorized_client|unsupported_grant_type|server_error|temporarily_unavailable)$/.test(normalized)
+        ? normalized
+        : "provider_error";
 }
 const defaultFetch = (input, init) => fetch(input, init);
 //# sourceMappingURL=oauth.js.map

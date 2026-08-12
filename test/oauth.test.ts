@@ -90,6 +90,81 @@ test("remote OAuth rejects a callback with the wrong state before spending a cod
   }
 });
 
+test("remote OAuth enforces a finite timeout and closes the redirect listener", async () => {
+  let closed = false;
+  await assert.rejects(
+    authorizeRemoteOAuth(
+      {
+        serverUrl: "https://mcp.example.test/mcp",
+        authorizationEndpoint: "https://auth.example.test/authorize",
+        tokenEndpoint: "https://auth.example.test/token",
+        clientId: "configured-client"
+      },
+      {
+        timeoutMs: 20,
+        redirect: async () => ({
+          redirectUri: "http://127.0.0.1:1/oauth/callback",
+          waitForCallback: () => new Promise<never>(() => undefined),
+          close: () => { closed = true; }
+        })
+      }
+    ),
+    (error: unknown) => error instanceof OAuthFlowError && error.code === "timeout"
+  );
+  assert.equal(closed, true);
+});
+
+test("authorization-code exchange is cancellation-shielded after the code is received", async () => {
+  const controller = new AbortController();
+  let expectedState = "";
+  const fetchFunction = async (input: RequestInfo | URL): Promise<Response> => {
+    if (new URL(input.toString()).pathname !== "/token") return new Response(null, { status: 404 });
+    setTimeout(() => controller.abort(), 5);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    return new Response(JSON.stringify({ access_token: "shielded-access-token", token_type: "Bearer" }), { status: 200 });
+  };
+  const credential = await authorizeRemoteOAuth(
+    {
+      serverUrl: "https://mcp.example.test/mcp",
+      authorizationEndpoint: "https://auth.example.test/authorize",
+      tokenEndpoint: "https://auth.example.test/token",
+      clientId: "configured-client"
+    },
+    {
+      fetch: fetchFunction,
+      signal: controller.signal,
+      redirect: async () => ({
+        redirectUri: "http://127.0.0.1:1/oauth/callback",
+        setExpectedState: (state) => { expectedState = state; },
+        waitForCallback: async () => ({ code: "single-use-code", state: expectedState })
+      })
+    }
+  );
+  assert.equal(credential.tokens.accessToken, "shielded-access-token");
+  assert.equal(controller.signal.aborted, true);
+});
+
+test("provider error bodies cannot echo token material into SDK errors", async () => {
+  const secret = "refresh-token-secret-never-log-123";
+  const fetchFunction = async (): Promise<Response> => new Response(JSON.stringify({ error: "invalid_grant", error_description: secret, access_token: secret }), { status: 400 });
+  await assert.rejects(
+    refreshRemoteOAuth(
+      {
+        serverUrl: "https://mcp.example.test/mcp",
+        authorizationEndpoint: "https://auth.example.test/authorize",
+        tokenEndpoint: "https://auth.example.test/token",
+        clientId: "configured-client"
+      },
+      { tokens: { accessToken: "old-access-token", refreshToken: secret } },
+      { fetch: fetchFunction }
+    ),
+    (error: unknown) => {
+      assert.doesNotMatch(String(error), new RegExp(secret));
+      return error instanceof OAuthFlowError && error.code === "invalid_grant";
+    }
+  );
+});
+
 test("McpClient remote authorization imports the credential and reconnects the server", async () => {
   const authorizationServer = await new MockAuthorizationServer().start();
   const server = new MockDoMoServer({
