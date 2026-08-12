@@ -9,6 +9,15 @@ export interface McpServerStatusInfo {
     endpoint?: string;
 }
 export type McpServerStatusMap = Record<string, McpServerStatusInfo>;
+export interface McpConnectResult {
+    status: McpServerStatus;
+    authorizationUrl?: string;
+    flowId?: string;
+    initiator?: string;
+}
+export interface McpLogoutResult {
+    status: McpServerStatus;
+}
 export interface McpResourceInfo {
     server: string;
     uri: string;

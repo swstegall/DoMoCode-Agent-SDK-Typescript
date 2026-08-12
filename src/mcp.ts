@@ -1,9 +1,12 @@
 import type { Transport } from "./transport.ts";
 import { encodePathSegment } from "./transport.ts";
 import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString, type JSONValue } from "./types/common.ts";
-import type { McpResourceInfo, McpResourceRead, McpResourceTemplateInfo, McpServerHealth, McpServerStatusInfo, McpServerStatusMap, McpTransport } from "./types/mcp.ts";
+import type { McpConnectResult, McpLogoutResult, McpResourceInfo, McpResourceRead, McpResourceTemplateInfo, McpServerHealth, McpServerStatusInfo, McpServerStatusMap, McpTransport } from "./types/mcp.ts";
 
 export interface McpClientOptions { maxAgeMs?: number }
+export interface McpConnectOptions {
+  openAuthorization?: (authorizationUrl: string) => Promise<boolean> | boolean;
+}
 
 interface CacheEntry<T> { value: T; expiresAt: number }
 
@@ -62,6 +65,23 @@ export class McpClient {
     return decodeMcpResourceRead(await this.transport.json<unknown>(`/mcp/${encodePathSegment(server)}/resource`, { method: "POST", body: { uri } }));
   }
 
+  /** Start a server-owned MCP connection, optionally handing its OAuth URL to the host. */
+  async connect(server: string, options: McpConnectOptions = {}): Promise<McpConnectResult> {
+    assertServerName(server);
+    const result = decodeMcpConnectResult(await this.transport.json<unknown>(`/mcp/${encodePathSegment(server)}/connect`, { method: "POST" }));
+    if (result.authorizationUrl !== undefined) await options.openAuthorization?.(result.authorizationUrl);
+    this.invalidate(server);
+    return result;
+  }
+
+  /** Disconnect a configured MCP server and discard server-side OAuth state. */
+  async logout(server: string): Promise<McpLogoutResult> {
+    assertServerName(server);
+    const result = decodeMcpLogoutResult(await this.transport.json<unknown>(`/mcp/${encodePathSegment(server)}/logout`, { method: "POST" }));
+    this.invalidate(server);
+    return result;
+  }
+
   /** Invalidate status and catalog snapshots after an `mcp_changed` frame. */
   invalidate(server?: string): void {
     this.serverCache = undefined;
@@ -89,6 +109,21 @@ export function decodeMcpServerStatusInfo(value: unknown): McpServerStatusInfo {
     ...(value.error === undefined || value.error === null ? {} : { error: requiredString(value.error, "MCP error") }),
     ...(value.endpoint === undefined || value.endpoint === null ? {} : { endpoint: requiredString(value.endpoint, "MCP endpoint") })
   };
+}
+
+export function decodeMcpConnectResult(value: unknown): McpConnectResult {
+  if (!isRecord(value)) throw new TypeError("MCP connect response must be an object");
+  return {
+    status: requiredString(value.status, "MCP connect status") as McpConnectResult["status"],
+    ...(value.authorizationUrl === undefined || value.authorizationUrl === null ? {} : { authorizationUrl: requiredString(value.authorizationUrl, "MCP authorizationUrl") }),
+    ...(value.flowId === undefined || value.flowId === null ? {} : { flowId: requiredString(value.flowId, "MCP flowId") }),
+    ...(value.initiator === undefined || value.initiator === null ? {} : { initiator: requiredString(value.initiator, "MCP initiator") })
+  };
+}
+
+export function decodeMcpLogoutResult(value: unknown): McpLogoutResult {
+  if (!isRecord(value)) throw new TypeError("MCP logout response must be an object");
+  return { status: requiredString(value.status, "MCP logout status") as McpLogoutResult["status"] };
 }
 
 export function decodeMcpResourceInfo(value: unknown): McpResourceInfo {

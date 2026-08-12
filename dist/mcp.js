@@ -57,6 +57,22 @@ export class McpClient {
             throw new TypeError("MCP resource uri is required");
         return decodeMcpResourceRead(await this.transport.json(`/mcp/${encodePathSegment(server)}/resource`, { method: "POST", body: { uri } }));
     }
+    /** Start a server-owned MCP connection, optionally handing its OAuth URL to the host. */
+    async connect(server, options = {}) {
+        assertServerName(server);
+        const result = decodeMcpConnectResult(await this.transport.json(`/mcp/${encodePathSegment(server)}/connect`, { method: "POST" }));
+        if (result.authorizationUrl !== undefined)
+            await options.openAuthorization?.(result.authorizationUrl);
+        this.invalidate(server);
+        return result;
+    }
+    /** Disconnect a configured MCP server and discard server-side OAuth state. */
+    async logout(server) {
+        assertServerName(server);
+        const result = decodeMcpLogoutResult(await this.transport.json(`/mcp/${encodePathSegment(server)}/logout`, { method: "POST" }));
+        this.invalidate(server);
+        return result;
+    }
     /** Invalidate status and catalog snapshots after an `mcp_changed` frame. */
     invalidate(server) {
         this.serverCache = undefined;
@@ -84,6 +100,21 @@ export function decodeMcpServerStatusInfo(value) {
         ...(value.error === undefined || value.error === null ? {} : { error: requiredString(value.error, "MCP error") }),
         ...(value.endpoint === undefined || value.endpoint === null ? {} : { endpoint: requiredString(value.endpoint, "MCP endpoint") })
     };
+}
+export function decodeMcpConnectResult(value) {
+    if (!isRecord(value))
+        throw new TypeError("MCP connect response must be an object");
+    return {
+        status: requiredString(value.status, "MCP connect status"),
+        ...(value.authorizationUrl === undefined || value.authorizationUrl === null ? {} : { authorizationUrl: requiredString(value.authorizationUrl, "MCP authorizationUrl") }),
+        ...(value.flowId === undefined || value.flowId === null ? {} : { flowId: requiredString(value.flowId, "MCP flowId") }),
+        ...(value.initiator === undefined || value.initiator === null ? {} : { initiator: requiredString(value.initiator, "MCP initiator") })
+    };
+}
+export function decodeMcpLogoutResult(value) {
+    if (!isRecord(value))
+        throw new TypeError("MCP logout response must be an object");
+    return { status: requiredString(value.status, "MCP logout status") };
 }
 export function decodeMcpResourceInfo(value) {
     if (!isRecord(value))

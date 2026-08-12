@@ -41,6 +41,25 @@ test("MCP changed frames decode and identify the affected server", () => {
   assert.deepEqual(decodeServerEvent({ type: "mcp_changed", server: "github" }), { type: "mcp_changed", server: "github" });
 });
 
+test("MCP connect delegates an authorization URL and logout invalidates the catalog", async () => {
+  let opened: string | undefined;
+  const server = new MockDoMoServer({
+    mcpConnectResults: {
+      github: { status: "needs_auth", authorizationUrl: "https://auth.example.test/start", flowId: "flow-1", initiator: "client-1" }
+    },
+    mcpLogoutResults: { github: { status: "needs_auth" } }
+  });
+  const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch });
+
+  const connect = await client.mcp.connect("github", { openAuthorization: (url) => { opened = url; return true; } });
+  assert.deepEqual(connect, { status: "needs_auth", authorizationUrl: "https://auth.example.test/start", flowId: "flow-1", initiator: "client-1" });
+  assert.equal(opened, "https://auth.example.test/start");
+  assert.deepEqual(await client.mcp.logout("github"), { status: "needs_auth" });
+
+  await client.close();
+  server.close();
+});
+
 test("MCP admin decoders reject malformed status and resource payloads", async () => {
   const client = new DoMoCodeClient({
     baseURL: "http://example.test",

@@ -36,6 +36,9 @@ export class MockDoMoServer {
     toolCatalog;
     skillCatalog;
     oauthPending;
+    mcpServers;
+    mcpConnectResults;
+    mcpLogoutResults;
     sessionsById = new Map();
     closed = false;
     constructor(options = {}) {
@@ -48,6 +51,9 @@ export class MockDoMoServer {
         this.toolCatalog = options.toolCatalog ?? [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
         this.skillCatalog = options.skillCatalog ?? [];
         this.oauthPending = options.oauthPending ?? [];
+        this.mcpServers = options.mcpServers ?? {};
+        this.mcpConnectResults = options.mcpConnectResults ?? {};
+        this.mcpLogoutResults = options.mcpLogoutResults ?? {};
         this.fetch = this.handleFetch.bind(this);
     }
     transport(options = {}) {
@@ -251,6 +257,16 @@ export class MockDoMoServer {
             return jsonResponse([{ id: "mock-model", provider: "mock" }]);
         if (method === "GET" && parts[0] === "memory")
             return jsonResponse([]);
+        if (method === "GET" && parts[0] === "mcp" && parts.length === 1)
+            return jsonResponse(this.mcpServers);
+        if (method === "POST" && parts[0] === "mcp" && parts[1] && parts[2] === "connect") {
+            const result = this.mcpConnectResults[parts[1]] ?? { status: "connected" };
+            return jsonResponse(result);
+        }
+        if (method === "POST" && parts[0] === "mcp" && parts[1] && parts[2] === "logout") {
+            const result = this.mcpLogoutResults[parts[1]] ?? { status: "needs_auth" };
+            return jsonResponse(result);
+        }
         return errorResponse(404, `route not found: ${url.pathname}`);
     }
     openEvents(session, after, signal) {

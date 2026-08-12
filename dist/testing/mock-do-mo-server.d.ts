@@ -4,6 +4,7 @@ import type { OAuthRequestEvent, ServerEvent } from "../types/events.ts";
 import type { Message } from "../types/messages.ts";
 import type { SessionRef } from "../types/sessions.ts";
 import type { SkillDescriptor, ToolCatalogEntry } from "../types/catalogs.ts";
+import type { McpConnectResult, McpLogoutResult, McpServerStatusMap } from "../types/mcp.ts";
 export interface MockPromptContext {
     sessionId: string;
     prompt: string;
@@ -25,6 +26,9 @@ export interface MockDoMoServerOptions {
     toolCatalog?: ToolCatalogEntry[];
     skillCatalog?: SkillDescriptor[];
     oauthPending?: OAuthRequestEvent[];
+    mcpServers?: McpServerStatusMap;
+    mcpConnectResults?: Record<string, McpConnectResult>;
+    mcpLogoutResults?: Record<string, McpLogoutResult>;
 }
 /**
  * A deterministic, protocol-shaped in-process DoMoCode server.
@@ -45,6 +49,9 @@ export declare class MockDoMoServer {
     private readonly toolCatalog;
     private readonly skillCatalog;
     private readonly oauthPending;
+    private readonly mcpServers;
+    private readonly mcpConnectResults;
+    private readonly mcpLogoutResults;
     private readonly sessionsById;
     private closed;
     constructor(options?: MockDoMoServerOptions);
