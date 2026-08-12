@@ -6,6 +6,8 @@ export const PROTOCOL_VERSION = 1 as const;
 
 export * from "./transport.ts";
 export * from "./uuid.ts";
+export * from "./sse.ts";
+export * from "./eventEngine.ts";
 
 export * from "./types/asks.ts";
 export * from "./types/catalogs.ts";
