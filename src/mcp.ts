@@ -1,11 +1,16 @@
 import type { Transport } from "./transport.ts";
 import { encodePathSegment } from "./transport.ts";
 import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString, type JSONValue } from "./types/common.ts";
-import type { McpConnectResult, McpLogoutResult, McpResourceInfo, McpResourceRead, McpResourceTemplateInfo, McpServerHealth, McpServerStatusInfo, McpServerStatusMap, McpTransport } from "./types/mcp.ts";
+import { authorizeRemoteOAuth, refreshRemoteOAuth, type RemoteOAuthOptions } from "./oauth.ts";
+import type { McpConnectResult, McpLogoutResult, McpOAuthClientRegistration, McpOAuthConfiguration, McpOAuthCredential, McpOAuthTokens, McpResourceInfo, McpResourceRead, McpResourceTemplateInfo, McpServerHealth, McpServerStatusInfo, McpServerStatusMap, McpTransport } from "./types/mcp.ts";
 
 export interface McpClientOptions { maxAgeMs?: number }
 export interface McpConnectOptions {
   openAuthorization?: (authorizationUrl: string) => Promise<boolean> | boolean;
+}
+export interface McpRemoteOAuthResult {
+  credential: McpOAuthCredential;
+  connection: McpConnectResult;
 }
 
 interface CacheEntry<T> { value: T; expiresAt: number }
@@ -82,6 +87,48 @@ export class McpClient {
     return result;
   }
 
+  /** Read the server's sanitized OAuth block and discovered endpoints. */
+  async oauthConfiguration(server: string): Promise<McpOAuthConfiguration> {
+    assertServerName(server);
+    return decodeMcpOAuthConfiguration(await this.transport.json<unknown>(`/mcp/${encodePathSegment(server)}/oauth/config`));
+  }
+
+  /** Import a remote-client credential and ask the server to reconnect. */
+  async importTokens(
+    server: string,
+    tokens: McpOAuthTokens,
+    client?: McpOAuthClientRegistration
+  ): Promise<McpConnectResult> {
+    assertServerName(server);
+    if (!tokens.accessToken) throw new TypeError("MCP OAuth accessToken is required");
+    const result = decodeMcpConnectResult(await this.transport.json<unknown>(`/mcp/${encodePathSegment(server)}/tokens`, {
+      method: "POST",
+      body: { tokens, ...(client === undefined ? {} : { client }) }
+    }));
+    this.invalidate(server);
+    return result;
+  }
+
+  /** Complete a remote OAuth flow in the SDK, then import its credential. */
+  async authorizeRemote(server: string, options: RemoteOAuthOptions = {}): Promise<McpRemoteOAuthResult> {
+    const configuration = await this.oauthConfiguration(server);
+    const credential = await authorizeRemoteOAuth(configuration, options);
+    const connection = await this.importTokens(server, credential.tokens, credential.client);
+    return { credential, connection };
+  }
+
+  /** Refresh an imported credential without exposing token material to logs. */
+  async refreshRemote(
+    server: string,
+    credential: McpOAuthCredential,
+    options: Pick<RemoteOAuthOptions, "fetch" | "signal"> = {}
+  ): Promise<McpRemoteOAuthResult> {
+    const configuration = await this.oauthConfiguration(server);
+    const refreshed = await refreshRemoteOAuth(configuration, credential, options);
+    const connection = await this.importTokens(server, refreshed.tokens, refreshed.client);
+    return { credential: refreshed, connection };
+  }
+
   /** Invalidate status and catalog snapshots after an `mcp_changed` frame. */
   invalidate(server?: string): void {
     this.serverCache = undefined;
@@ -124,6 +171,24 @@ export function decodeMcpConnectResult(value: unknown): McpConnectResult {
 export function decodeMcpLogoutResult(value: unknown): McpLogoutResult {
   if (!isRecord(value)) throw new TypeError("MCP logout response must be an object");
   return { status: requiredString(value.status, "MCP logout status") as McpLogoutResult["status"] };
+}
+
+export function decodeMcpOAuthConfiguration(value: unknown): McpOAuthConfiguration {
+  if (!isRecord(value)) throw new TypeError("MCP OAuth configuration must be an object");
+  return {
+    serverUrl: requiredString(value.serverUrl, "MCP OAuth serverUrl"),
+    ...(value.authorizationEndpoint === undefined || value.authorizationEndpoint === null ? {} : { authorizationEndpoint: requiredString(value.authorizationEndpoint, "MCP OAuth authorizationEndpoint") }),
+    ...(value.tokenEndpoint === undefined || value.tokenEndpoint === null ? {} : { tokenEndpoint: requiredString(value.tokenEndpoint, "MCP OAuth tokenEndpoint") }),
+    ...(value.registrationEndpoint === undefined || value.registrationEndpoint === null ? {} : { registrationEndpoint: requiredString(value.registrationEndpoint, "MCP OAuth registrationEndpoint") }),
+    ...(value.issuer === undefined || value.issuer === null ? {} : { issuer: requiredString(value.issuer, "MCP OAuth issuer") }),
+    ...(value.codeChallengeMethodsSupported === undefined || value.codeChallengeMethodsSupported === null ? {} : { codeChallengeMethodsSupported: requiredArray(value.codeChallengeMethodsSupported, "MCP OAuth codeChallengeMethodsSupported").map((item) => requiredString(item, "MCP OAuth PKCE method")) }),
+    ...(value.scopesSupported === undefined || value.scopesSupported === null ? {} : { scopesSupported: requiredArray(value.scopesSupported, "MCP OAuth scopesSupported").map((item) => requiredString(item, "MCP OAuth scope")) }),
+    ...(value.clientId === undefined || value.clientId === null ? {} : { clientId: requiredString(value.clientId, "MCP OAuth clientId") }),
+    ...(value.scope === undefined || value.scope === null ? {} : { scope: requiredString(value.scope, "MCP OAuth scope") }),
+    ...(value.resource === undefined || value.resource === null ? {} : { resource: requiredString(value.resource, "MCP OAuth resource") }),
+    ...(value.redirectUri === undefined || value.redirectUri === null ? {} : { redirectUri: requiredString(value.redirectUri, "MCP OAuth redirectUri") }),
+    ...(value.cacheKey === undefined || value.cacheKey === null ? {} : { cacheKey: requiredString(value.cacheKey, "MCP OAuth cacheKey") })
+  };
 }
 
 export function decodeMcpResourceInfo(value: unknown): McpResourceInfo {

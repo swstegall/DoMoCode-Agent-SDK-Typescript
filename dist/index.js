@@ -14,6 +14,7 @@ export * from "./jobs.js";
 export * from "./handoffs.js";
 export * from "./automations.js";
 export * from "./mcp.js";
+export * from "./oauth.js";
 export * from "./session.js";
 export * from "./interactionRuntime.js";
 export * from "./transcript.js";

@@ -14,6 +14,7 @@ export * from "./jobs.ts";
 export * from "./handoffs.ts";
 export * from "./automations.ts";
 export * from "./mcp.ts";
+export * from "./oauth.ts";
 export * from "./session.ts";
 export * from "./interactionRuntime.ts";
 export * from "./transcript.ts";

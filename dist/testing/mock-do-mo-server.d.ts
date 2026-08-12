@@ -4,7 +4,7 @@ import type { OAuthRequestEvent, ServerEvent } from "../types/events.ts";
 import type { Message } from "../types/messages.ts";
 import type { SessionRef } from "../types/sessions.ts";
 import type { SkillDescriptor, ToolCatalogEntry } from "../types/catalogs.ts";
-import type { McpConnectResult, McpLogoutResult, McpServerStatusMap } from "../types/mcp.ts";
+import type { McpConnectResult, McpLogoutResult, McpOAuthConfiguration, McpOAuthCredential, McpServerStatusMap } from "../types/mcp.ts";
 export interface MockPromptContext {
     sessionId: string;
     prompt: string;
@@ -29,6 +29,8 @@ export interface MockDoMoServerOptions {
     mcpServers?: McpServerStatusMap;
     mcpConnectResults?: Record<string, McpConnectResult>;
     mcpLogoutResults?: Record<string, McpLogoutResult>;
+    mcpOAuthConfigurations?: Record<string, McpOAuthConfiguration>;
+    mcpTokenImportResults?: Record<string, McpConnectResult>;
 }
 /**
  * A deterministic, protocol-shaped in-process DoMoCode server.
@@ -52,11 +54,15 @@ export declare class MockDoMoServer {
     private readonly mcpServers;
     private readonly mcpConnectResults;
     private readonly mcpLogoutResults;
+    private readonly mcpOAuthConfigurations;
+    private readonly mcpTokenImportResults;
+    private readonly mcpTokenImports;
     private readonly sessionsById;
     private closed;
     constructor(options?: MockDoMoServerOptions);
     transport(options?: Partial<Omit<ConstructorParameters<typeof Transport>[0], "baseURL" | "token" | "fetch">>): Transport;
     session(id: string): SessionRef | undefined;
+    tokenImport(server: string): McpOAuthCredential | undefined;
     createSession(resume?: string): Promise<SessionRef>;
     emit(sessionId: string, event: ServerEvent): number;
     requestPermission(sessionId: string, request: Omit<Extract<ServerEvent, {

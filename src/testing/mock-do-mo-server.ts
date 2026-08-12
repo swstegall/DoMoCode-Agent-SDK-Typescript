@@ -8,7 +8,7 @@ import type { OAuthRequestEvent, ServerEvent } from "../types/events.ts";
 import type { Message } from "../types/messages.ts";
 import type { SessionClientAttachment, SessionRef, SessionStatus } from "../types/sessions.ts";
 import type { SkillDescriptor, ToolCatalogEntry } from "../types/catalogs.ts";
-import type { McpConnectResult, McpLogoutResult, McpServerStatusMap } from "../types/mcp.ts";
+import type { McpConnectResult, McpLogoutResult, McpOAuthConfiguration, McpOAuthCredential, McpServerStatusMap } from "../types/mcp.ts";
 
 export interface MockPromptContext {
   sessionId: string;
@@ -36,6 +36,8 @@ export interface MockDoMoServerOptions {
   mcpServers?: McpServerStatusMap;
   mcpConnectResults?: Record<string, McpConnectResult>;
   mcpLogoutResults?: Record<string, McpLogoutResult>;
+  mcpOAuthConfigurations?: Record<string, McpOAuthConfiguration>;
+  mcpTokenImportResults?: Record<string, McpConnectResult>;
 }
 
 interface SequencedEvent { sequence: number; event: ServerEvent }
@@ -100,6 +102,9 @@ export class MockDoMoServer {
   private readonly mcpServers: McpServerStatusMap;
   private readonly mcpConnectResults: Record<string, McpConnectResult>;
   private readonly mcpLogoutResults: Record<string, McpLogoutResult>;
+  private readonly mcpOAuthConfigurations: Record<string, McpOAuthConfiguration>;
+  private readonly mcpTokenImportResults: Record<string, McpConnectResult>;
+  private readonly mcpTokenImports = new Map<string, McpOAuthCredential>();
   private readonly sessionsById = new Map<string, MockSession>();
   private closed = false;
 
@@ -116,6 +121,8 @@ export class MockDoMoServer {
     this.mcpServers = options.mcpServers ?? {};
     this.mcpConnectResults = options.mcpConnectResults ?? {};
     this.mcpLogoutResults = options.mcpLogoutResults ?? {};
+    this.mcpOAuthConfigurations = options.mcpOAuthConfigurations ?? {};
+    this.mcpTokenImportResults = options.mcpTokenImportResults ?? {};
     this.fetch = this.handleFetch.bind(this);
   }
 
@@ -124,6 +131,8 @@ export class MockDoMoServer {
   }
 
   session(id: string): SessionRef | undefined { return this.sessionsById.get(id)?.ref; }
+
+  tokenImport(server: string): McpOAuthCredential | undefined { return this.mcpTokenImports.get(server); }
 
   async createSession(resume?: string): Promise<SessionRef> {
     if (resume) {
@@ -252,6 +261,20 @@ export class MockDoMoServer {
     if (method === "POST" && parts[0] === "mcp" && parts[1] && parts[2] === "connect") {
       const result = this.mcpConnectResults[parts[1]] ?? { status: "connected" };
       return jsonResponse(result);
+    }
+    if (method === "GET" && parts[0] === "mcp" && parts[1] && parts[2] === "oauth" && parts[3] === "config") {
+      const configuration = this.mcpOAuthConfigurations[parts[1]];
+      return configuration === undefined ? errorResponse(404, "OAuth configuration not found") : jsonResponse(configuration);
+    }
+    if (method === "POST" && parts[0] === "mcp" && parts[1] && parts[2] === "tokens") {
+      const body = bodyObject(init);
+      const tokens = isRecord(body.tokens) ? body.tokens : {};
+      const imported: McpOAuthCredential = {
+        tokens: tokens as unknown as McpOAuthCredential["tokens"],
+        ...(isRecord(body.client) ? { client: body.client as unknown as NonNullable<McpOAuthCredential["client"]> } : {})
+      };
+      this.mcpTokenImports.set(parts[1], imported);
+      return jsonResponse(this.mcpTokenImportResults[parts[1]] ?? { status: "connected" });
     }
     if (method === "POST" && parts[0] === "mcp" && parts[1] && parts[2] === "logout") {
       const result = this.mcpLogoutResults[parts[1]] ?? { status: "needs_auth" };

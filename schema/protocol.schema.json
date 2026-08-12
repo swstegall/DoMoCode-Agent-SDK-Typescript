@@ -100,9 +100,59 @@
         "source": {"type": "string"},
         "body": {"type": "string"}
       }
+    },
+    "McpOAuthTokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accessToken"],
+      "properties": {
+        "accessToken": {"type": "string"},
+        "refreshToken": {"type": "string"},
+        "expiresAt": {"type": "number"},
+        "refreshTokenExpiresAt": {"type": "number"},
+        "scope": {"type": "string"}
+      }
+    },
+    "McpOAuthClientRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clientId"],
+      "properties": {
+        "clientId": {"type": "string"},
+        "clientSecret": {"type": "string"},
+        "clientSecretExpiresAt": {"type": "number"}
+      }
+    },
+    "McpOAuthConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["serverUrl"],
+      "properties": {
+        "serverUrl": {"type": "string"},
+        "authorizationEndpoint": {"type": "string"},
+        "tokenEndpoint": {"type": "string"},
+        "registrationEndpoint": {"type": "string"},
+        "issuer": {"type": "string"},
+        "codeChallengeMethodsSupported": {"type": "array", "items": {"type": "string"}},
+        "scopesSupported": {"type": "array", "items": {"type": "string"}},
+        "clientId": {"type": "string"},
+        "scope": {"type": "string"},
+        "resource": {"type": "string"},
+        "redirectUri": {"type": "string"},
+        "cacheKey": {"type": "string"}
+      }
+    },
+    "McpOAuthCredential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens"],
+      "properties": {
+        "tokens": {"$ref": "#/$defs/McpOAuthTokens"},
+        "client": {"$ref": "#/$defs/McpOAuthClientRegistration"}
+      }
     }
   },
   "x-routes": [
-    "/session", "/sessions", "/session/{id}/events", "/session/{id}/status", "/session/{id}/permissions", "/session/{id}/questions", "/session/{id}/messages", "/session/{id}/context", "/session/{id}/prompt", "/session/{id}/steer", "/session/{id}/abort", "/session/{id}/force-clear", "/session/{id}/permission", "/session/{id}/question", "/session/{id}/tools", "/session/{id}/tool", "/session/{id}/model", "/session/{id}/mode", "/session/{id}/fork", "/session/{id}/clone", "/session/{id}/rename", "/session/{id}/title", "/session/{id}/label", "/session/{id}/leaf", "/session/{id}/compact", "/session/{id}/undo", "/session/{id}/redo", "/session/{id}/tree", "/session/{id}/children", "/session/{id}/timeline", "/session/{id}/diff", "/session/{id}/workspace-status", "/session/{id}/client/attach", "/session/{id}/client/detach", "/session/{id}/client/authority", "/session/{id}/client/authority/release", "/session/{id}/client/authority/transfer", "/session/{id}/client/cursor", "/session/{id}/client/events", "/session/{id}/client/export", "/commands", "/agents", "/models", "/memory", "/skills", "/oauth/pending", "/mcp", "/mcp/{server}/connect", "/mcp/{server}/logout", "/mcp/{server}/resources", "/mcp/{server}/resource-templates", "/mcp/{server}/resource", "/mcp/{server}/health", "/handoffs", "/handoff", "/jobs", "/automations", "/workflows", "/capabilities"
+    "/session", "/sessions", "/session/{id}/events", "/session/{id}/status", "/session/{id}/permissions", "/session/{id}/questions", "/session/{id}/messages", "/session/{id}/context", "/session/{id}/prompt", "/session/{id}/steer", "/session/{id}/abort", "/session/{id}/force-clear", "/session/{id}/permission", "/session/{id}/question", "/session/{id}/tools", "/session/{id}/tool", "/session/{id}/model", "/session/{id}/mode", "/session/{id}/fork", "/session/{id}/clone", "/session/{id}/rename", "/session/{id}/title", "/session/{id}/label", "/session/{id}/leaf", "/session/{id}/compact", "/session/{id}/undo", "/session/{id}/redo", "/session/{id}/tree", "/session/{id}/children", "/session/{id}/timeline", "/session/{id}/diff", "/session/{id}/workspace-status", "/session/{id}/client/attach", "/session/{id}/client/detach", "/session/{id}/client/authority", "/session/{id}/client/authority/release", "/session/{id}/client/authority/transfer", "/session/{id}/client/cursor", "/session/{id}/client/events", "/session/{id}/client/export", "/commands", "/agents", "/models", "/memory", "/skills", "/oauth/pending", "/mcp", "/mcp/{server}/connect", "/mcp/{server}/logout", "/mcp/{server}/oauth/config", "/mcp/{server}/tokens", "/mcp/{server}/resources", "/mcp/{server}/resource-templates", "/mcp/{server}/resource", "/mcp/{server}/health", "/handoffs", "/handoff", "/jobs", "/automations", "/workflows", "/capabilities"
   ]
 }

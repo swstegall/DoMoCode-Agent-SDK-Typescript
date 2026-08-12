@@ -1,10 +1,15 @@
 import type { Transport } from "./transport.ts";
-import type { McpConnectResult, McpLogoutResult, McpResourceInfo, McpResourceRead, McpResourceTemplateInfo, McpServerHealth, McpServerStatusInfo, McpServerStatusMap } from "./types/mcp.ts";
+import { type RemoteOAuthOptions } from "./oauth.ts";
+import type { McpConnectResult, McpLogoutResult, McpOAuthClientRegistration, McpOAuthConfiguration, McpOAuthCredential, McpOAuthTokens, McpResourceInfo, McpResourceRead, McpResourceTemplateInfo, McpServerHealth, McpServerStatusInfo, McpServerStatusMap } from "./types/mcp.ts";
 export interface McpClientOptions {
     maxAgeMs?: number;
 }
 export interface McpConnectOptions {
     openAuthorization?: (authorizationUrl: string) => Promise<boolean> | boolean;
+}
+export interface McpRemoteOAuthResult {
+    credential: McpOAuthCredential;
+    connection: McpConnectResult;
 }
 /** Typed access to the process-scoped MCP admin routes.
  *
@@ -27,6 +32,14 @@ export declare class McpClient {
     connect(server: string, options?: McpConnectOptions): Promise<McpConnectResult>;
     /** Disconnect a configured MCP server and discard server-side OAuth state. */
     logout(server: string): Promise<McpLogoutResult>;
+    /** Read the server's sanitized OAuth block and discovered endpoints. */
+    oauthConfiguration(server: string): Promise<McpOAuthConfiguration>;
+    /** Import a remote-client credential and ask the server to reconnect. */
+    importTokens(server: string, tokens: McpOAuthTokens, client?: McpOAuthClientRegistration): Promise<McpConnectResult>;
+    /** Complete a remote OAuth flow in the SDK, then import its credential. */
+    authorizeRemote(server: string, options?: RemoteOAuthOptions): Promise<McpRemoteOAuthResult>;
+    /** Refresh an imported credential without exposing token material to logs. */
+    refreshRemote(server: string, credential: McpOAuthCredential, options?: Pick<RemoteOAuthOptions, "fetch" | "signal">): Promise<McpRemoteOAuthResult>;
     /** Invalidate status and catalog snapshots after an `mcp_changed` frame. */
     invalidate(server?: string): void;
 }
@@ -34,6 +47,7 @@ export declare function decodeMcpServerStatusMap(value: unknown): McpServerStatu
 export declare function decodeMcpServerStatusInfo(value: unknown): McpServerStatusInfo;
 export declare function decodeMcpConnectResult(value: unknown): McpConnectResult;
 export declare function decodeMcpLogoutResult(value: unknown): McpLogoutResult;
+export declare function decodeMcpOAuthConfiguration(value: unknown): McpOAuthConfiguration;
 export declare function decodeMcpResourceInfo(value: unknown): McpResourceInfo;
 export declare function decodeMcpResourceTemplateInfo(value: unknown): McpResourceTemplateInfo;
 export declare function decodeMcpResourceRead(value: unknown): McpResourceRead;

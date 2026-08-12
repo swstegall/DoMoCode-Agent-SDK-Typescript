@@ -24,6 +24,40 @@ export interface McpLogoutResult {
   status: McpServerStatus;
 }
 
+export interface McpOAuthTokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  refreshTokenExpiresAt?: number;
+  scope?: string;
+}
+
+export interface McpOAuthClientRegistration {
+  clientId: string;
+  clientSecret?: string;
+  clientSecretExpiresAt?: number;
+}
+
+export interface McpOAuthConfiguration {
+  serverUrl: string;
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  registrationEndpoint?: string;
+  issuer?: string;
+  codeChallengeMethodsSupported?: string[];
+  scopesSupported?: string[];
+  clientId?: string;
+  scope?: string;
+  resource?: string;
+  redirectUri?: string;
+  cacheKey?: string;
+}
+
+export interface McpOAuthCredential {
+  tokens: McpOAuthTokens;
+  client?: McpOAuthClientRegistration;
+}
+
 export interface McpResourceInfo {
   server: string;
   uri: string;

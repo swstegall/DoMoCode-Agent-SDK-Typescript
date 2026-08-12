@@ -32,3 +32,6 @@ Child-session monitoring and task resumption are documented in [`docs/subagents.
 
 MCP administration, fallback filtering, and the deterministic stdio fixture are documented
 in [`docs/catalogs.md`](docs/catalogs.md).
+
+Remote MCP OAuth, PKCE, loopback callbacks, and token import are documented in
+[`docs/oauth.md`](docs/oauth.md).

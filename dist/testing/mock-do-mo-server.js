@@ -39,6 +39,9 @@ export class MockDoMoServer {
     mcpServers;
     mcpConnectResults;
     mcpLogoutResults;
+    mcpOAuthConfigurations;
+    mcpTokenImportResults;
+    mcpTokenImports = new Map();
     sessionsById = new Map();
     closed = false;
     constructor(options = {}) {
@@ -54,12 +57,15 @@ export class MockDoMoServer {
         this.mcpServers = options.mcpServers ?? {};
         this.mcpConnectResults = options.mcpConnectResults ?? {};
         this.mcpLogoutResults = options.mcpLogoutResults ?? {};
+        this.mcpOAuthConfigurations = options.mcpOAuthConfigurations ?? {};
+        this.mcpTokenImportResults = options.mcpTokenImportResults ?? {};
         this.fetch = this.handleFetch.bind(this);
     }
     transport(options = {}) {
         return new Transport({ baseURL: this.baseURL, token: this.token, fetch: this.fetch, ...options });
     }
     session(id) { return this.sessionsById.get(id)?.ref; }
+    tokenImport(server) { return this.mcpTokenImports.get(server); }
     async createSession(resume) {
         if (resume) {
             const existing = this.sessionsById.get(resume);
@@ -262,6 +268,20 @@ export class MockDoMoServer {
         if (method === "POST" && parts[0] === "mcp" && parts[1] && parts[2] === "connect") {
             const result = this.mcpConnectResults[parts[1]] ?? { status: "connected" };
             return jsonResponse(result);
+        }
+        if (method === "GET" && parts[0] === "mcp" && parts[1] && parts[2] === "oauth" && parts[3] === "config") {
+            const configuration = this.mcpOAuthConfigurations[parts[1]];
+            return configuration === undefined ? errorResponse(404, "OAuth configuration not found") : jsonResponse(configuration);
+        }
+        if (method === "POST" && parts[0] === "mcp" && parts[1] && parts[2] === "tokens") {
+            const body = bodyObject(init);
+            const tokens = isRecord(body.tokens) ? body.tokens : {};
+            const imported = {
+                tokens: tokens,
+                ...(isRecord(body.client) ? { client: body.client } : {})
+            };
+            this.mcpTokenImports.set(parts[1], imported);
+            return jsonResponse(this.mcpTokenImportResults[parts[1]] ?? { status: "connected" });
         }
         if (method === "POST" && parts[0] === "mcp" && parts[1] && parts[2] === "logout") {
             const result = this.mcpLogoutResults[parts[1]] ?? { status: "needs_auth" };
