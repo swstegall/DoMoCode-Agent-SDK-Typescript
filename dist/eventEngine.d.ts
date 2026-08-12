@@ -37,11 +37,15 @@ export declare class EventEngine implements AsyncIterableIterator<ServerEvent> {
     private readonly queue;
     private readonly reconciledInteractions;
     private readonly listeners;
+    private readonly connectedWaiters;
     private readonly stopped;
     private started;
+    private connectedOnce;
     private runPromise;
     constructor(options: EventEngineOptions);
     get lastSequence(): number;
+    /** Resolve once the initial connected frame has been observed. */
+    waitForConnected(): Promise<void>;
     onEvent(listener: EventListener): () => void;
     start(): void;
     stop(): Promise<void>;
@@ -51,5 +55,7 @@ export declare class EventEngine implements AsyncIterableIterator<ServerEvent> {
     private run;
     private consume;
     private publish;
+    private resolveConnected;
+    private rejectConnected;
 }
 //# sourceMappingURL=eventEngine.d.ts.map

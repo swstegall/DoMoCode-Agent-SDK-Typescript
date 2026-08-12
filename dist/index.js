@@ -11,6 +11,7 @@ export * from "./catalogs.js";
 export * from "./session.js";
 export * from "./interactionRuntime.js";
 export * from "./transcript.js";
+export * from "./query.js";
 export * from "./types/asks.js";
 export * from "./types/catalogs.js";
 export * from "./types/common.js";

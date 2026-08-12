@@ -79,8 +79,10 @@ export class EventEngine {
     queue;
     reconciledInteractions = new Set();
     listeners = new Set();
+    connectedWaiters = [];
     stopped = new AbortController();
     started = false;
+    connectedOnce = false;
     runPromise;
     constructor(options) {
         this.options = {
@@ -94,6 +96,15 @@ export class EventEngine {
         this.queue = new AsyncQueue(this.options.queueSize, () => { this.stats.lagged += 1; options.onLagged?.(this.stats.lagged); });
     }
     get lastSequence() { return this.stats.lastSequence; }
+    /** Resolve once the initial connected frame has been observed. */
+    async waitForConnected() {
+        this.start();
+        if (this.connectedOnce)
+            return;
+        if (this.stopped.signal.aborted)
+            throw new EventStreamError("DoMoCode event engine is stopped.");
+        await new Promise((resolve, reject) => this.connectedWaiters.push({ resolve, reject }));
+    }
     onEvent(listener) {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
@@ -107,6 +118,8 @@ export class EventEngine {
     async stop() {
         this.stopped.abort();
         this.queue.end();
+        if (!this.connectedOnce)
+            this.rejectConnected(new EventStreamError("DoMoCode event engine stopped before connecting."));
         await this.runPromise;
     }
     async next() { this.start(); return this.queue.next(); }
@@ -137,6 +150,7 @@ export class EventEngine {
                     break;
                 if (error instanceof ProtocolMismatchError || error instanceof SseDecodeError) {
                     this.queue.end(error);
+                    this.rejectConnected(error);
                     break;
                 }
                 this.stats.reconnects += 1;
@@ -174,6 +188,7 @@ export class EventEngine {
                 if (!("protocolVersion" in event) || event.protocolVersion !== this.options.protocolVersion)
                     throw new ProtocolMismatchError("protocolVersion" in event && typeof event.protocolVersion === "number" ? event.protocolVersion : -1, this.options.protocolVersion);
                 this.publish(event);
+                this.resolveConnected();
                 if (this.options.reconcile) {
                     for (const pending of await this.options.reconcile(streamAbort.signal)) {
                         const event = decodeServerEvent(pending);
@@ -206,6 +221,17 @@ export class EventEngine {
         this.queue.push(event);
         for (const listener of this.listeners)
             listener(event);
+    }
+    resolveConnected() {
+        if (this.connectedOnce)
+            return;
+        this.connectedOnce = true;
+        while (this.connectedWaiters.length > 0)
+            this.connectedWaiters.shift()?.resolve();
+    }
+    rejectConnected(error) {
+        while (this.connectedWaiters.length > 0)
+            this.connectedWaiters.shift()?.reject(error);
     }
 }
 function interactionKey(event) {

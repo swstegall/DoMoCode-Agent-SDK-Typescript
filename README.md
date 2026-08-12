@@ -25,3 +25,5 @@ Interaction handling is documented in [`docs/interactions.md`](docs/interactions
 provide both capability-object asks (`ask.allow()`, `ask.answer()`) and low-level answer methods.
 
 Catalogs, direct tools, and transcript export are covered in [`docs/catalogs.md`](docs/catalogs.md).
+
+The high-level `query()`/`runQuery()` layer is documented in [`docs/query.md`](docs/query.md).

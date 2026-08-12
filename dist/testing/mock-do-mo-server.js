@@ -70,7 +70,8 @@ export class MockDoMoServer {
             messages: [],
             queued: 0,
             model: "mock-model",
-            mode: "build"
+            mode: "build",
+            finishAfterInteractions: false
         });
         return ref;
     }
@@ -309,6 +310,11 @@ export class MockDoMoServer {
             this.emit(session.ref.id, { type: "message_start", message: result.message });
             this.emit(session.ref.id, { type: "message_end", message: result.message });
         }
+        const waitingForInteraction = (result?.events ?? []).some((event) => event.type === "permission_request" || event.type === "question_request");
+        if (this.autoComplete && waitingForInteraction) {
+            session.finishAfterInteractions = true;
+            return;
+        }
         if (this.autoComplete) {
             if (!result?.message && !result?.events) {
                 const message = { role: "assistant", content: [{ type: "text", text: `Mock response: ${prompt}` }], model: session.model, usage: { input: prompt.length, output: 3, cacheRead: 0, cacheWrite: 0, cost: { input: "0", output: "0", cacheRead: "0", cacheWrite: "0" } }, stopReason: "stop" };
@@ -320,6 +326,14 @@ export class MockDoMoServer {
             this.emit(session.ref.id, { type: "agent_end", reason: result?.stopReason ?? "completed", ...(session.runId === undefined ? {} : { runId: session.runId }) });
             session.running = false;
         }
+    }
+    finishMockRun(session) {
+        if (!session.running || !session.finishAfterInteractions)
+            return;
+        session.finishAfterInteractions = false;
+        this.emit(session.ref.id, { type: "turn_end" });
+        this.emit(session.ref.id, { type: "agent_end", reason: "completed", ...(session.runId === undefined ? {} : { runId: session.runId }) });
+        session.running = false;
     }
     steer(session, body) {
         if (!session.running)
@@ -333,6 +347,7 @@ export class MockDoMoServer {
         if (!session.permissions.has(id))
             return jsonResponse({});
         this.emit(session.ref.id, { type: "permission_resolved", id });
+        this.finishMockRun(session);
         return jsonResponse({});
     }
     answerQuestion(session, body) {
@@ -340,6 +355,7 @@ export class MockDoMoServer {
         if (!session.questions.has(id))
             return jsonResponse({});
         this.emit(session.ref.id, { type: "question_resolved", id });
+        this.finishMockRun(session);
         return jsonResponse({});
     }
     executeTool(session, body) {

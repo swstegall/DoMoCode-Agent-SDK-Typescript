@@ -58,6 +58,7 @@ export declare class MockDoMoServer {
     private enqueue;
     private prompt;
     private runPrompt;
+    private finishMockRun;
     private steer;
     private answerPermission;
     private answerQuestion;

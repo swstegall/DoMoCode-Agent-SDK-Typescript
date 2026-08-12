@@ -76,8 +76,10 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
   private readonly queue: AsyncQueue<ServerEvent>;
   private readonly reconciledInteractions = new Set<string>();
   private readonly listeners = new Set<EventListener>();
+  private readonly connectedWaiters: Array<{ resolve: () => void; reject: (reason: unknown) => void }> = [];
   private readonly stopped = new AbortController();
   private started = false;
+  private connectedOnce = false;
   private runPromise: Promise<void> | undefined;
 
   constructor(options: EventEngineOptions) {
@@ -94,6 +96,14 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
 
   get lastSequence(): number { return this.stats.lastSequence; }
 
+  /** Resolve once the initial connected frame has been observed. */
+  async waitForConnected(): Promise<void> {
+    this.start();
+    if (this.connectedOnce) return;
+    if (this.stopped.signal.aborted) throw new EventStreamError("DoMoCode event engine is stopped.");
+    await new Promise<void>((resolve, reject) => this.connectedWaiters.push({ resolve, reject }));
+  }
+
   onEvent(listener: EventListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -108,6 +118,7 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
   async stop(): Promise<void> {
     this.stopped.abort();
     this.queue.end();
+    if (!this.connectedOnce) this.rejectConnected(new EventStreamError("DoMoCode event engine stopped before connecting."));
     await this.runPromise;
   }
 
@@ -135,7 +146,7 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
         backoff = this.options.initialBackoffMs;
       } catch (error) {
         if (this.stopped.signal.aborted) break;
-        if (error instanceof ProtocolMismatchError || error instanceof SseDecodeError) { this.queue.end(error); break; }
+        if (error instanceof ProtocolMismatchError || error instanceof SseDecodeError) { this.queue.end(error); this.rejectConnected(error); break; }
         this.stats.reconnects += 1;
         await abortableDelay(backoff, this.stopped.signal);
         backoff = Math.min(this.options.maximumBackoffMs, backoff * 2);
@@ -163,6 +174,7 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
       if (event.type === "connected") {
         if (!("protocolVersion" in event) || event.protocolVersion !== this.options.protocolVersion) throw new ProtocolMismatchError("protocolVersion" in event && typeof event.protocolVersion === "number" ? event.protocolVersion : -1, this.options.protocolVersion);
         this.publish(event);
+        this.resolveConnected();
         if (this.options.reconcile) {
           for (const pending of await this.options.reconcile(streamAbort.signal)) {
             const event = decodeServerEvent(pending);
@@ -192,6 +204,16 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
   private publish(event: ServerEvent): void {
     this.queue.push(event);
     for (const listener of this.listeners) listener(event);
+  }
+
+  private resolveConnected(): void {
+    if (this.connectedOnce) return;
+    this.connectedOnce = true;
+    while (this.connectedWaiters.length > 0) this.connectedWaiters.shift()?.resolve();
+  }
+
+  private rejectConnected(error: unknown): void {
+    while (this.connectedWaiters.length > 0) this.connectedWaiters.shift()?.reject(error);
   }
 }
 
