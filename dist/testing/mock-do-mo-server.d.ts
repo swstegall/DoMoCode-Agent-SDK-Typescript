@@ -5,6 +5,7 @@ import type { Message } from "../types/messages.ts";
 import type { SessionRef } from "../types/sessions.ts";
 import type { SkillDescriptor, ToolCatalogEntry } from "../types/catalogs.ts";
 import type { McpConnectResult, McpLogoutResult, McpOAuthConfiguration, McpOAuthCredential, McpServerStatusMap } from "../types/mcp.ts";
+import type { ClientToolDefinition } from "../types/tools.ts";
 export interface MockPromptContext {
     sessionId: string;
     prompt: string;
@@ -65,7 +66,7 @@ export declare class MockDoMoServer {
     transport(options?: Partial<Omit<ConstructorParameters<typeof Transport>[0], "baseURL" | "token" | "fetch">>): Transport;
     session(id: string): SessionRef | undefined;
     tokenImport(server: string): McpOAuthCredential | undefined;
-    createSession(resume?: string): Promise<SessionRef>;
+    createSession(resume?: string, clientTools?: ClientToolDefinition[]): Promise<SessionRef>;
     emit(sessionId: string, event: ServerEvent): number;
     requestPermission(sessionId: string, request: Omit<Extract<ServerEvent, {
         type: "permission_request";
@@ -85,6 +86,7 @@ export declare class MockDoMoServer {
     private steer;
     private answerPermission;
     private answerQuestion;
+    private answerClientTool;
     private executeTool;
     private fork;
     private attach;

@@ -1,8 +1,9 @@
 import { EventEngine, type EventListener } from "./eventEngine.ts";
 import { Transport, encodePathSegment } from "./transport.ts";
 import { decodeMessage, type ImageBlock, type Message } from "./types/messages.ts";
-import { decodeServerEvent, type ServerEvent } from "./types/events.ts";
+import { decodeServerEvent, type ClientToolRequestEvent, type ServerEvent } from "./types/events.ts";
 import type { QuestionAnswer } from "./types/asks.ts";
+import { validateClientToolDefinitions, type ClientToolHandler, type ClientToolHandlerOptions, type ClientToolResult, type ClientToolDefinition } from "./types/tools.ts";
 import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString, type JSONValue } from "./types/common.ts";
 import type { AbortResult, ContextSnapshot, DirectToolResult, ForceClearResult, GitDiff, RunResult, ServerCapabilities, SessionAccounting, SessionClientAttachment, SessionClientEvent, SessionClientJournalEntry, SessionRef, SessionStatus, SessionSummary, SessionTreeEntry, WorkspaceHistoryResult, WorkspaceSnapshotStatus } from "./types/sessions.ts";
 import { asDecimalString } from "./types/decimal.ts";
@@ -15,7 +16,7 @@ import { renderTranscript, type TranscriptOptions } from "./transcript.ts";
 import { SubagentRegistry, type SubagentRegistryOptions } from "./subagents.ts";
 
 export type AuthorityPreference = "require" | "prefer" | "observer";
-export interface SessionAttachOptions { authority?: AuthorityPreference }
+export interface SessionAttachOptions { authority?: AuthorityPreference; clientTools?: readonly ClientToolDefinition[] }
 export interface SessionAcquireOptions extends SessionAttachOptions { mode?: "exclusive" | "shared" }
 export interface PromptOptions { images?: ImageBlock[] }
 export interface SendOptions extends PromptOptions { preferSteer?: boolean }
@@ -39,6 +40,8 @@ export class SessionHandle {
   private cursor = 0;
   private interactionRuntime: InteractionRuntime | undefined;
   private subagentRegistry: SubagentRegistry | undefined;
+  private clientToolSubscription: (() => void) | undefined;
+  private readonly activeClientTools = new Map<string, { controller: AbortController; settled: boolean }>();
 
   constructor(client: DoMoCodeClient, ref: SessionRef, forget: () => void) { this.client = client; this.ref = ref; this.forget = forget; }
   get id(): string { return this.ref.id; }
@@ -58,8 +61,9 @@ export class SessionHandle {
   async attach(options: SessionAttachOptions = {}): Promise<SessionClientAttachment> {
     this.assertUsable();
     const authority = options.authority ?? "require";
+    const clientTools = options.clientTools === undefined ? undefined : validateClientToolDefinitions(options.clientTools);
     try {
-      const resumed = await this.client.transport.json<unknown>("/session", { method: "POST", body: { resume: this.id } });
+      const resumed = await this.client.transport.json<unknown>("/session", { method: "POST", body: { resume: this.id, ...(clientTools === undefined ? {} : { clientTools }) } });
       this.ref = decodeRef(resumed, this.ref);
     } catch (error) {
       if (!(error instanceof NotFoundError)) throw error;
@@ -91,6 +95,7 @@ export class SessionHandle {
       });
       this.engine.onEvent((event) => {
         if (event.type === "mcp_changed" && "server" in event) this.client.mcp.invalidate(event.server);
+        if (event.type === "client_tool_resolved" && "id" in event && typeof event.id === "string") this.resolveClientTool(event.id);
       });
       this.engine.start();
     }
@@ -99,6 +104,31 @@ export class SessionHandle {
 
   events(): EventEngine { this.assertUsable(); if (!this.engine) throw new Error("Session is not attached"); return this.engine; }
   onEvent(listener: EventListener): () => void { return this.events().onEvent(listener); }
+
+  /**
+   * Execute model calls for tools registered by the client and post their
+   * results back to the owning session. Only one handler is active per handle;
+   * registering a new one cleanly replaces the previous handler.
+   */
+  onToolCall(handler: ClientToolHandler, options: ClientToolHandlerOptions = {}): () => void {
+    this.assertUsable();
+    const timeoutMs = options.timeoutMs ?? 60_000;
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 0) throw new TypeError("Client tool timeoutMs must be a finite non-negative number");
+    this.clientToolSubscription?.();
+    const unsubscribe = this.events().onEvent((event) => {
+      if (event.type === "client_tool_resolved" && "id" in event && typeof event.id === "string") {
+        this.resolveClientTool(event.id);
+        return;
+      }
+      if (event.type === "client_tool_request" && "sessionId" in event && event.sessionId === this.id) void this.executeClientTool(event as ClientToolRequestEvent, handler, timeoutMs);
+    });
+    this.clientToolSubscription = () => {
+      unsubscribe();
+      for (const active of this.activeClientTools.values()) active.controller.abort(new Error("Client tool handler was removed."));
+      this.clientToolSubscription = undefined;
+    };
+    return this.clientToolSubscription;
+  }
 
   /** Return the session's single interaction dispatcher, creating it lazily. */
   interactionRuntimeFor(options: InteractionRuntimeOptions = {}): InteractionRuntime {
@@ -360,6 +390,7 @@ export class SessionHandle {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    this.clientToolSubscription?.();
     this.interactionRuntime?.close();
     await this.subagentRegistry?.close();
     try { if (this.engine) await this.engine.stop(); } catch { /* disposal is best effort */ }
@@ -418,6 +449,67 @@ export class SessionHandle {
       catch (error) { if (!(error instanceof NotFoundError)) throw error; }
     }
     return events;
+  }
+
+  private resolveClientTool(requestId: string): void {
+    const active = this.activeClientTools.get(requestId);
+    if (!active) return;
+    active.settled = true;
+    active.controller.abort(new Error("Client tool request was resolved by the server."));
+    this.activeClientTools.delete(requestId);
+  }
+
+  private async executeClientTool(event: ClientToolRequestEvent, handler: ClientToolHandler, timeoutMs: number): Promise<void> {
+    const previous = this.activeClientTools.get(event.id);
+    previous?.controller.abort(new Error("Client tool request was superseded."));
+    const controller = new AbortController();
+    const active = { controller, settled: false };
+    this.activeClientTools.set(event.id, active);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let removeAbort: (() => void) | undefined;
+    let result: ClientToolResult;
+    try {
+      const call = { id: event.id, sessionId: event.sessionId, name: event.name, arguments: event.arguments, signal: controller.signal };
+      const work = Promise.resolve().then(() => handler(call));
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort(new Error(`Client tool ${event.name} timed out.`));
+          reject(new Error(`Client tool ${event.name} timed out.`));
+        }, timeoutMs);
+      });
+      const aborted = new Promise<never>((_, reject) => {
+        const abort = () => reject(controller.signal.reason instanceof Error ? controller.signal.reason : new Error(`Client tool ${event.name} was aborted.`));
+        if (controller.signal.aborted) abort();
+        else {
+          controller.signal.addEventListener("abort", abort, { once: true });
+          removeAbort = () => controller.signal.removeEventListener("abort", abort);
+        }
+      });
+      const value = await Promise.race([work, timeout, aborted]);
+      result = typeof value === "string" ? { output: value } : value;
+      if (!result || typeof result.output !== "string") throw new TypeError("Client tool handlers must return a string or { output }");
+    } catch (error) {
+      result = { output: error instanceof Error ? error.message : `Client tool ${event.name} failed.`, isError: true };
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      removeAbort?.();
+    }
+    if (active.settled) return;
+    this.activeClientTools.delete(event.id);
+    try {
+      await this.client.transport.json(sessionPath(this.id, "/client-tool"), {
+        method: "POST",
+        body: {
+          requestID: event.id,
+          output: result.output,
+          isError: result.isError ?? false,
+          ...(result.images === undefined ? {} : { images: result.images })
+        }
+      });
+    } catch {
+      // The run may have been aborted between handler completion and posting.
+      // The server-side continuation is already timeout/cancellation safe.
+    }
   }
 
   private assertUsable(): void { if (this.disposed) throw new Error("Session handle has been disposed"); }

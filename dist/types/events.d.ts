@@ -129,12 +129,25 @@ export interface OAuthResolvedEvent {
     status: OpenEnum<"connected" | "failed" | "cancelled">;
     error?: string;
 }
+export interface ClientToolRequestEvent {
+    type: "client_tool_request";
+    id: string;
+    sessionId: string;
+    name: string;
+    arguments: JSONValue;
+}
+export interface ClientToolResolvedEvent {
+    type: "client_tool_resolved";
+    id: string;
+    name: string;
+    isError: boolean;
+}
 export interface UnknownEvent {
     type: string;
     raw: unknown;
     sequence?: number;
 }
-export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | OAuthRequestEvent | OAuthResolvedEvent | UnknownEvent;
+export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | OAuthRequestEvent | OAuthResolvedEvent | ClientToolRequestEvent | ClientToolResolvedEvent | UnknownEvent;
 export type SequencedServerEvent = ServerEvent & {
     sequence: number;
 };

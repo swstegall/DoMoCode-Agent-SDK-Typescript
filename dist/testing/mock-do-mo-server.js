@@ -71,11 +71,13 @@ export class MockDoMoServer {
     }
     session(id) { return this.sessionsById.get(id)?.ref; }
     tokenImport(server) { return this.mcpTokenImports.get(server); }
-    async createSession(resume) {
+    async createSession(resume, clientTools = []) {
         if (resume) {
             const existing = this.sessionsById.get(resume);
             if (!existing)
                 throw new Error(`Unknown mock session ${resume}`);
+            if (clientTools.length > 0 && JSON.stringify(existing.clientTools) !== JSON.stringify(clientTools))
+                throw new Error("Client tool definitions cannot change while a session is live");
             return existing.ref;
         }
         const id = uuidv7();
@@ -89,6 +91,8 @@ export class MockDoMoServer {
             streams: new Set(),
             permissions: new Map(),
             questions: new Map(),
+            clientTools: [...clientTools],
+            clientToolRequests: new Map(),
             clients: new Map(),
             messages: [],
             queued: 0,
@@ -114,6 +118,10 @@ export class MockDoMoServer {
             session.questions.set(event.id, event);
         if (event.type === "question_resolved" && "id" in event)
             session.questions.delete(event.id);
+        if (event.type === "client_tool_request" && "id" in event && "name" in event)
+            session.clientToolRequests.set(event.id, event);
+        if (event.type === "client_tool_resolved" && "id" in event)
+            session.clientToolRequests.delete(event.id);
         for (const stream of session.streams)
             this.enqueue(stream, { ...event, sequence });
         return sequence;
@@ -174,7 +182,7 @@ export class MockDoMoServer {
                 return jsonResponse([...this.sessionsById.values()].map((session) => session.summary));
             if (method === "POST" && url.pathname === "/session") {
                 const body = bodyObject(init);
-                return jsonResponse(await this.createSession(typeof body.resume === "string" ? body.resume : undefined), 201);
+                return jsonResponse(await this.createSession(typeof body.resume === "string" ? body.resume : undefined, Array.isArray(body.clientTools) ? body.clientTools : []), 201);
             }
             if (parts[0] !== "session" || !parts[1])
                 return this.handleGlobal(method, parts, url, init);
@@ -218,6 +226,8 @@ export class MockDoMoServer {
                 return this.isAuthority(session, init) ? this.answerPermission(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "question")
                 return this.isAuthority(session, init) ? this.answerQuestion(session, bodyObject(init)) : errorResponse(403, "authority required");
+            if (method === "POST" && tail[0] === "client-tool")
+                return this.isAuthority(session, init) ? this.answerClientTool(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "tool")
                 return this.isAuthority(session, init) ? this.executeTool(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "fork")
@@ -390,7 +400,7 @@ export class MockDoMoServer {
             this.emit(session.ref.id, { type: "message_start", message: result.message });
             this.emit(session.ref.id, { type: "message_end", message: result.message });
         }
-        const waitingForInteraction = (result?.events ?? []).some((event) => event.type === "permission_request" || event.type === "question_request");
+        const waitingForInteraction = (result?.events ?? []).some((event) => event.type === "permission_request" || event.type === "question_request" || event.type === "client_tool_request");
         if (this.autoComplete && waitingForInteraction) {
             session.finishAfterInteractions = true;
             return;
@@ -437,6 +447,15 @@ export class MockDoMoServer {
         this.emit(session.ref.id, { type: "question_resolved", id });
         this.finishMockRun(session);
         return jsonResponse({});
+    }
+    answerClientTool(session, body) {
+        const id = typeof body.requestID === "string" ? body.requestID : "";
+        if (!session.clientToolRequests.has(id))
+            return jsonResponse({ accepted: false });
+        const isError = body.isError === true;
+        this.emit(session.ref.id, { type: "client_tool_resolved", id, name: session.clientToolRequests.get(id)?.name ?? "unknown", isError });
+        this.finishMockRun(session);
+        return jsonResponse({ accepted: true });
     }
     executeTool(session, body) {
         const command = typeof body.command === "string" ? body.command.trim() : "";
@@ -494,7 +513,18 @@ export class MockDoMoServer {
         return jsonResponse(target);
     }
     tools(_session) {
-        return this.toolCatalog;
+        const session = _session;
+        return [
+            ...this.toolCatalog,
+            ...session.clientTools.map((tool) => ({
+                name: tool.name,
+                description: tool.description,
+                source: "adapter",
+                inputSchema: tool.inputSchema,
+                permission: "allowed",
+                metadata: { clientDefined: true }
+            }))
+        ];
     }
     status(session) {
         return { sessionId: session.ref.id, running: session.running, pendingPermissionIds: [...session.permissions.keys()], pendingQuestionIds: [...session.questions.keys()], subscribers: session.streams.size, queuedMessageCount: session.queued, mode: session.mode, agent: "default" };

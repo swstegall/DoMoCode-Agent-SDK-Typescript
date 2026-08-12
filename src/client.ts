@@ -12,6 +12,7 @@ import { HandoffClient } from "./handoffs.ts";
 import { AutomationClient } from "./automations.ts";
 import { McpClient } from "./mcp.ts";
 import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
+import { validateClientToolDefinitions } from "./types/tools.ts";
 
 export interface DoMoCodeClientOptions extends TransportOptions {}
 export interface CatalogOptions extends ModelCatalogOptions {
@@ -135,13 +136,15 @@ export class SessionRegistry {
   }
 
   async create(options: SessionAttachOptions = {}): Promise<SessionHandle> {
-    const value = await this.client.transport.json<unknown>("/session", { method: "POST", body: {} });
+    const clientTools = options.clientTools === undefined ? undefined : validateClientToolDefinitions(options.clientTools);
+    const value = await this.client.transport.json<unknown>("/session", { method: "POST", body: clientTools === undefined ? {} : { clientTools } });
     const ref = decodeSessionRef(value);
     return this.openRef(ref, options);
   }
 
   async resume(id: string, options: SessionAttachOptions = {}): Promise<SessionHandle> {
-    const value = await this.client.transport.json<unknown>("/session", { method: "POST", body: { resume: id } });
+    const clientTools = options.clientTools === undefined ? undefined : validateClientToolDefinitions(options.clientTools);
+    const value = await this.client.transport.json<unknown>("/session", { method: "POST", body: { resume: id, ...(clientTools === undefined ? {} : { clientTools }) } });
     const ref = decodeSessionRef(value);
     return this.openRef(ref, options);
   }

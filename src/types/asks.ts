@@ -1,4 +1,5 @@
 import type { JSONValue } from "./common.ts";
+import type { ClientToolCall } from "./tools.ts";
 
 export interface PermissionRequest {
   id: string;
@@ -26,5 +27,6 @@ export interface OAuthInteraction {
   open(): Promise<boolean>;
   decline(): void;
 }
+export interface ClientToolInteraction extends ClientToolCall { kind: "client_tool"; resolve(result: { output: string; isError?: boolean; images?: import("./messages.ts").ImageBlock[] }): Promise<void>; decline(): void }
 export interface UnknownInteraction { kind: string; id: string; sessionId?: string; raw: unknown }
-export type PendingInteraction = PermissionInteraction | QuestionInteraction | OAuthInteraction | UnknownInteraction;
+export type PendingInteraction = PermissionInteraction | QuestionInteraction | OAuthInteraction | ClientToolInteraction | UnknownInteraction;

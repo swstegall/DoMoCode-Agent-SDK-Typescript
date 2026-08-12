@@ -10,6 +10,7 @@ import { HandoffClient } from "./handoffs.js";
 import { AutomationClient } from "./automations.js";
 import { McpClient } from "./mcp.js";
 import { InteractionRuntime } from "./interactionRuntime.js";
+import { validateClientToolDefinitions } from "./types/tools.js";
 export class DoMoCodeClient {
     transport;
     sessions;
@@ -124,12 +125,14 @@ export class SessionRegistry {
         return value.map(decodeSessionSummary);
     }
     async create(options = {}) {
-        const value = await this.client.transport.json("/session", { method: "POST", body: {} });
+        const clientTools = options.clientTools === undefined ? undefined : validateClientToolDefinitions(options.clientTools);
+        const value = await this.client.transport.json("/session", { method: "POST", body: clientTools === undefined ? {} : { clientTools } });
         const ref = decodeSessionRef(value);
         return this.openRef(ref, options);
     }
     async resume(id, options = {}) {
-        const value = await this.client.transport.json("/session", { method: "POST", body: { resume: id } });
+        const clientTools = options.clientTools === undefined ? undefined : validateClientToolDefinitions(options.clientTools);
+        const value = await this.client.transport.json("/session", { method: "POST", body: { resume: id, ...(clientTools === undefined ? {} : { clientTools }) } });
         const ref = decodeSessionRef(value);
         return this.openRef(ref, options);
     }

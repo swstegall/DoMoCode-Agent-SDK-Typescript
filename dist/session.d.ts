@@ -2,6 +2,7 @@ import { EventEngine, type EventListener } from "./eventEngine.ts";
 import { type ImageBlock, type Message } from "./types/messages.ts";
 import { type ServerEvent } from "./types/events.ts";
 import type { QuestionAnswer } from "./types/asks.ts";
+import { type ClientToolHandler, type ClientToolHandlerOptions, type ClientToolDefinition } from "./types/tools.ts";
 import { type JSONValue } from "./types/common.ts";
 import type { ContextSnapshot, DirectToolResult, GitDiff, RunResult, SessionAccounting, SessionClientAttachment, SessionClientEvent, SessionClientJournalEntry, SessionRef, SessionStatus, SessionTreeEntry, WorkspaceHistoryResult, WorkspaceSnapshotStatus } from "./types/sessions.ts";
 import type { DoMoCodeClient } from "./client.ts";
@@ -12,6 +13,7 @@ import { SubagentRegistry, type SubagentRegistryOptions } from "./subagents.ts";
 export type AuthorityPreference = "require" | "prefer" | "observer";
 export interface SessionAttachOptions {
     authority?: AuthorityPreference;
+    clientTools?: readonly ClientToolDefinition[];
 }
 export interface SessionAcquireOptions extends SessionAttachOptions {
     mode?: "exclusive" | "shared";
@@ -54,6 +56,8 @@ export declare class SessionHandle {
     private cursor;
     private interactionRuntime;
     private subagentRegistry;
+    private clientToolSubscription;
+    private readonly activeClientTools;
     constructor(client: DoMoCodeClient, ref: SessionRef, forget: () => void);
     get id(): string;
     get path(): string;
@@ -65,6 +69,12 @@ export declare class SessionHandle {
     attach(options?: SessionAttachOptions): Promise<SessionClientAttachment>;
     events(): EventEngine;
     onEvent(listener: EventListener): () => void;
+    /**
+     * Execute model calls for tools registered by the client and post their
+     * results back to the owning session. Only one handler is active per handle;
+     * registering a new one cleanly replaces the previous handler.
+     */
+    onToolCall(handler: ClientToolHandler, options?: ClientToolHandlerOptions): () => void;
     /** Return the session's single interaction dispatcher, creating it lazily. */
     interactionRuntimeFor(options?: InteractionRuntimeOptions): InteractionRuntime;
     interactions(options?: InteractionRuntimeOptions): AsyncIterableIterator<RuntimeInteraction>;
@@ -130,6 +140,8 @@ export declare class SessionHandle {
     private postPrompt;
     private pendingInteractionPayloads;
     private reconcile;
+    private resolveClientTool;
+    private executeClientTool;
     private assertUsable;
 }
 export declare function decodeAttachment(value: unknown, fallbackSessionId: string): SessionClientAttachment;

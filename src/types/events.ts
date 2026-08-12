@@ -48,9 +48,11 @@ export interface SubagentEvent { type: "subagent"; subagent: SubagentTaskEvent }
 export interface McpChangedEvent { type: "mcp_changed"; server: string }
 export interface OAuthRequestEvent { type: "oauth_request"; id: string; server: string; authorizationUrl: string; expiresAt: string }
 export interface OAuthResolvedEvent { type: "oauth_resolved"; id: string; server: string; status: OpenEnum<"connected" | "failed" | "cancelled">; error?: string }
+export interface ClientToolRequestEvent { type: "client_tool_request"; id: string; sessionId: string; name: string; arguments: JSONValue }
+export interface ClientToolResolvedEvent { type: "client_tool_resolved"; id: string; name: string; isError: boolean }
 export interface UnknownEvent { type: string; raw: unknown; sequence?: number }
 
-export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | OAuthRequestEvent | OAuthResolvedEvent | UnknownEvent;
+export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | OAuthRequestEvent | OAuthResolvedEvent | ClientToolRequestEvent | ClientToolResolvedEvent | UnknownEvent;
 export type SequencedServerEvent = ServerEvent & { sequence: number };
 
 export class WireDecodeError extends TypeError {
@@ -134,6 +136,8 @@ export function decodeServerEvent(value: unknown): ServerEvent {
     case "mcp_changed": return { type, server: requiredString(value.server, "server") };
     case "oauth_request": return { type, id: requiredString(value.id, "id"), server: requiredString(value.server, "server"), authorizationUrl: requiredString(value.authorizationUrl, "authorizationUrl"), expiresAt: requiredString(value.expiresAt, "expiresAt") };
     case "oauth_resolved": return { type, id: requiredString(value.id, "id"), server: requiredString(value.server, "server"), status: requiredString(value.status, "status") as OAuthResolvedEvent["status"], ...(value.error === undefined || value.error === null ? {} : { error: requiredString(value.error, "error") }) };
+    case "client_tool_request": return { type, id: requiredString(value.id, "id"), sessionId: requiredString(value.sessionId, "sessionId"), name: requiredString(value.name, "name"), arguments: (value.arguments ?? {}) as JSONValue };
+    case "client_tool_resolved": return { type, id: requiredString(value.id, "id"), name: requiredString(value.name, "name"), isError: requiredBoolean(value.isError, "isError") };
     default: return { type, raw: value };
   }
 }

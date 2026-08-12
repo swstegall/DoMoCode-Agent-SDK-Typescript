@@ -9,6 +9,7 @@ import type { Message } from "../types/messages.ts";
 import type { SessionClientAttachment, SessionRef, SessionStatus } from "../types/sessions.ts";
 import type { SkillDescriptor, ToolCatalogEntry } from "../types/catalogs.ts";
 import type { McpConnectResult, McpLogoutResult, McpOAuthConfiguration, McpOAuthCredential, McpServerStatusMap } from "../types/mcp.ts";
+import type { ClientToolDefinition } from "../types/tools.ts";
 
 export interface MockPromptContext {
   sessionId: string;
@@ -53,6 +54,8 @@ interface MockSession {
   streams: Set<StreamState>;
   permissions: Map<string, Extract<ServerEvent, { type: "permission_request" }>>;
   questions: Map<string, Extract<ServerEvent, { type: "question_request" }>>;
+  clientTools: ClientToolDefinition[];
+  clientToolRequests: Map<string, Extract<ServerEvent, { type: "client_tool_request" }>>;
   clients: Map<string, SessionClientAttachment>;
   messages: Message[];
   queued: number;
@@ -140,10 +143,11 @@ export class MockDoMoServer {
 
   tokenImport(server: string): McpOAuthCredential | undefined { return this.mcpTokenImports.get(server); }
 
-  async createSession(resume?: string): Promise<SessionRef> {
+  async createSession(resume?: string, clientTools: ClientToolDefinition[] = []): Promise<SessionRef> {
     if (resume) {
       const existing = this.sessionsById.get(resume);
       if (!existing) throw new Error(`Unknown mock session ${resume}`);
+      if (clientTools.length > 0 && JSON.stringify(existing.clientTools) !== JSON.stringify(clientTools)) throw new Error("Client tool definitions cannot change while a session is live");
       return existing.ref;
     }
     const id = uuidv7();
@@ -157,6 +161,8 @@ export class MockDoMoServer {
       streams: new Set(),
       permissions: new Map(),
       questions: new Map(),
+      clientTools: [...clientTools],
+      clientToolRequests: new Map(),
       clients: new Map(),
       messages: [],
       queued: 0,
@@ -177,6 +183,8 @@ export class MockDoMoServer {
     if (event.type === "permission_resolved" && "id" in event) session.permissions.delete(event.id);
     if (event.type === "question_request" && "id" in event) session.questions.set(event.id, event as Extract<ServerEvent, { type: "question_request" }>);
     if (event.type === "question_resolved" && "id" in event) session.questions.delete(event.id);
+    if (event.type === "client_tool_request" && "id" in event && "name" in event) session.clientToolRequests.set(event.id, event as Extract<ServerEvent, { type: "client_tool_request" }>);
+    if (event.type === "client_tool_resolved" && "id" in event) session.clientToolRequests.delete(event.id);
     for (const stream of session.streams) this.enqueue(stream, { ...event, sequence });
     return sequence;
   }
@@ -234,7 +242,7 @@ export class MockDoMoServer {
       if (method === "GET" && url.pathname === "/sessions") return jsonResponse([...this.sessionsById.values()].map((session) => session.summary));
       if (method === "POST" && url.pathname === "/session") {
         const body = bodyObject(init);
-        return jsonResponse(await this.createSession(typeof body.resume === "string" ? body.resume : undefined), 201);
+        return jsonResponse(await this.createSession(typeof body.resume === "string" ? body.resume : undefined, Array.isArray(body.clientTools) ? body.clientTools as ClientToolDefinition[] : []), 201);
       }
       if (parts[0] !== "session" || !parts[1]) return this.handleGlobal(method, parts, url, init);
       const session = this.sessionsById.get(parts[1]);
@@ -253,6 +261,7 @@ export class MockDoMoServer {
       if (method === "POST" && tail[0] === "force-clear") { if (!this.isAuthority(session, init)) return errorResponse(403, "authority required"); const cleared = session.running; session.running = false; return jsonResponse({ cleared }); }
       if (method === "POST" && tail[0] === "permission") return this.isAuthority(session, init) ? this.answerPermission(session, bodyObject(init)) : errorResponse(403, "authority required");
       if (method === "POST" && tail[0] === "question") return this.isAuthority(session, init) ? this.answerQuestion(session, bodyObject(init)) : errorResponse(403, "authority required");
+      if (method === "POST" && tail[0] === "client-tool") return this.isAuthority(session, init) ? this.answerClientTool(session, bodyObject(init)) : errorResponse(403, "authority required");
       if (method === "POST" && tail[0] === "tool") return this.isAuthority(session, init) ? this.executeTool(session, bodyObject(init)) : errorResponse(403, "authority required");
       if (method === "POST" && tail[0] === "fork") return this.fork(session);
       if (method === "POST" && tail[0] === "clone") return this.fork(session);
@@ -373,7 +382,7 @@ export class MockDoMoServer {
       this.emit(session.ref.id, { type: "message_start", message: result.message });
       this.emit(session.ref.id, { type: "message_end", message: result.message });
     }
-    const waitingForInteraction = (result?.events ?? []).some((event) => event.type === "permission_request" || event.type === "question_request");
+    const waitingForInteraction = (result?.events ?? []).some((event) => event.type === "permission_request" || event.type === "question_request" || event.type === "client_tool_request");
     if (this.autoComplete && waitingForInteraction) {
       session.finishAfterInteractions = true;
       return;
@@ -420,6 +429,15 @@ export class MockDoMoServer {
     this.emit(session.ref.id, { type: "question_resolved", id });
     this.finishMockRun(session);
     return jsonResponse({});
+  }
+
+  private answerClientTool(session: MockSession, body: Record<string, unknown>): Response {
+    const id = typeof body.requestID === "string" ? body.requestID : "";
+    if (!session.clientToolRequests.has(id)) return jsonResponse({ accepted: false });
+    const isError = body.isError === true;
+    this.emit(session.ref.id, { type: "client_tool_resolved", id, name: session.clientToolRequests.get(id)?.name ?? "unknown", isError });
+    this.finishMockRun(session);
+    return jsonResponse({ accepted: true });
   }
 
   private executeTool(session: MockSession, body: Record<string, unknown>): Response {
@@ -481,7 +499,18 @@ export class MockDoMoServer {
   }
 
   private tools(_session: MockSession): ToolCatalogEntry[] {
-    return this.toolCatalog;
+    const session = _session;
+    return [
+      ...this.toolCatalog,
+      ...session.clientTools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        source: "adapter" as const,
+        inputSchema: tool.inputSchema,
+        permission: "allowed" as const,
+        metadata: { clientDefined: true }
+      }))
+    ];
   }
 
   private status(session: MockSession): SessionStatus {

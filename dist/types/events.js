@@ -81,6 +81,8 @@ export function decodeServerEvent(value) {
         case "mcp_changed": return { type, server: requiredString(value.server, "server") };
         case "oauth_request": return { type, id: requiredString(value.id, "id"), server: requiredString(value.server, "server"), authorizationUrl: requiredString(value.authorizationUrl, "authorizationUrl"), expiresAt: requiredString(value.expiresAt, "expiresAt") };
         case "oauth_resolved": return { type, id: requiredString(value.id, "id"), server: requiredString(value.server, "server"), status: requiredString(value.status, "status"), ...(value.error === undefined || value.error === null ? {} : { error: requiredString(value.error, "error") }) };
+        case "client_tool_request": return { type, id: requiredString(value.id, "id"), sessionId: requiredString(value.sessionId, "sessionId"), name: requiredString(value.name, "name"), arguments: (value.arguments ?? {}) };
+        case "client_tool_resolved": return { type, id: requiredString(value.id, "id"), name: requiredString(value.name, "name"), isError: requiredBoolean(value.isError, "isError") };
         default: return { type, raw: value };
     }
 }

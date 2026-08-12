@@ -1,4 +1,29 @@
 import type { JSONValue } from "./common.ts";
+import type { ImageBlock } from "./messages.ts";
+export interface ClientToolDefinition {
+    name: string;
+    description: string;
+    inputSchema: Record<string, JSONValue>;
+}
+export interface ClientToolCall {
+    id: string;
+    sessionId: string;
+    name: string;
+    arguments: JSONValue;
+    signal: AbortSignal;
+}
+export interface ClientToolResult {
+    output: string;
+    isError?: boolean;
+    images?: ImageBlock[];
+}
+export type ClientToolHandlerResult = ClientToolResult | string;
+export type ClientToolHandler = (call: ClientToolCall) => Promise<ClientToolHandlerResult> | ClientToolHandlerResult;
+export interface ClientToolHandlerOptions {
+    /** Bound local handler execution; the server also enforces its own timeout. */
+    timeoutMs?: number;
+}
+export declare function validateClientToolDefinitions(definitions: readonly ClientToolDefinition[]): ClientToolDefinition[];
 export interface ReadToolInput {
     path: string;
     lineStart?: number;
