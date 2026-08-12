@@ -3,12 +3,15 @@ import { Transport, encodePathSegment } from "./transport.ts";
 import { decodeMessage, type ImageBlock, type Message } from "./types/messages.ts";
 import { decodeServerEvent, type ServerEvent } from "./types/events.ts";
 import type { QuestionAnswer } from "./types/asks.ts";
-import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString } from "./types/common.ts";
+import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString, type JSONValue } from "./types/common.ts";
 import type { AbortResult, ContextSnapshot, DirectToolResult, ForceClearResult, GitDiff, RunResult, ServerCapabilities, SessionAccounting, SessionClientAttachment, SessionClientEvent, SessionClientJournalEntry, SessionRef, SessionStatus, SessionSummary, SessionTreeEntry, WorkspaceHistoryResult, WorkspaceSnapshotStatus } from "./types/sessions.ts";
 import { asDecimalString } from "./types/decimal.ts";
 import { AttachRejectedError, AuthorityUnavailableError, ConflictError, DoMoError, NotFoundError, RunStalledError, RunStateRaceError, SessionAlreadyAcquiredError, SessionBusyError } from "./types/errors.ts";
 import type { DoMoCodeClient } from "./client.ts";
 import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
+import { decodeToolCatalog } from "./catalogs.ts";
+import type { ToolCatalogEntry } from "./types/catalogs.ts";
+import { renderTranscript, type TranscriptOptions } from "./transcript.ts";
 
 export type AuthorityPreference = "require" | "prefer" | "observer";
 export interface SessionAttachOptions { authority?: AuthorityPreference }
@@ -149,6 +152,10 @@ export class SessionHandle {
     return requiredArray(value, "messages").map(decodeMessage);
   }
 
+  async transcript(options: TranscriptOptions = {}): Promise<string> {
+    return renderTranscript(await this.messages(), options);
+  }
+
   async context(): Promise<ContextSnapshot> {
     const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/context"));
     if (!isRecord(value)) throw new TypeError("Context snapshot must be an object");
@@ -186,7 +193,19 @@ export class SessionHandle {
     return isRecord(value) && typeof value.message === "string" ? value.message : undefined;
   }
 
-  async tools(): Promise<unknown[]> { const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/tools")); return requiredArray(value, "tools"); }
+  async tools(): Promise<ToolCatalogEntry[]> {
+    return decodeToolCatalog(await this.client.transport.json<unknown>(sessionPath(this.id, "/tools")));
+  }
+
+  async executeTool(name: string, argumentsValue: Record<string, JSONValue> = {}): Promise<DirectToolResult> {
+    if (!/^[A-Za-z0-9_.:-]+$/.test(name)) throw new TypeError("Tool name contains unsupported direct-command characters");
+    return this.executeToolCommand(`/${name} ${JSON.stringify(argumentsValue)}`);
+  }
+
+  async executeToolCommand(command: string): Promise<DirectToolResult> {
+    const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/tool"), { method: "POST", body: { command } });
+    return decodeDirectToolResult(value);
+  }
 
   async answerPermission(requestId: string, reply: "once" | "always" | "reject", message?: string): Promise<void> {
     const body = { requestID: requestId, reply, ...(message === undefined ? {} : { message }) };
@@ -382,3 +401,13 @@ export function decodeAccounting(value: unknown): SessionAccounting {
 
 function sessionPath(id: string, suffix = ""): string { return `/session/${encodePathSegment(id)}${suffix}`; }
 function delay(milliseconds: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
+
+function decodeDirectToolResult(value: unknown): DirectToolResult {
+  if (!isRecord(value)) throw new TypeError("Direct tool result must be an object");
+  return {
+    toolName: requiredString(value.toolName, "toolName"),
+    output: requiredString(value.output, "output"),
+    isError: requiredBoolean(value.isError, "isError"),
+    imageCount: requiredNumber(value.imageCount ?? 0, "imageCount")
+  };
+}

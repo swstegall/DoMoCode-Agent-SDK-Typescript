@@ -2,9 +2,12 @@ import { EventEngine, type EventListener } from "./eventEngine.ts";
 import { type ImageBlock, type Message } from "./types/messages.ts";
 import { type ServerEvent } from "./types/events.ts";
 import type { QuestionAnswer } from "./types/asks.ts";
-import type { ContextSnapshot, GitDiff, RunResult, SessionAccounting, SessionClientAttachment, SessionClientEvent, SessionClientJournalEntry, SessionRef, SessionStatus, SessionTreeEntry, WorkspaceHistoryResult, WorkspaceSnapshotStatus } from "./types/sessions.ts";
+import { type JSONValue } from "./types/common.ts";
+import type { ContextSnapshot, DirectToolResult, GitDiff, RunResult, SessionAccounting, SessionClientAttachment, SessionClientEvent, SessionClientJournalEntry, SessionRef, SessionStatus, SessionTreeEntry, WorkspaceHistoryResult, WorkspaceSnapshotStatus } from "./types/sessions.ts";
 import type { DoMoCodeClient } from "./client.ts";
 import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
+import type { ToolCatalogEntry } from "./types/catalogs.ts";
+import { type TranscriptOptions } from "./transcript.ts";
 export type AuthorityPreference = "require" | "prefer" | "observer";
 export interface SessionAttachOptions {
     authority?: AuthorityPreference;
@@ -60,6 +63,7 @@ export declare class SessionHandle {
     status(): Promise<SessionStatus>;
     accounting(): Promise<SessionAccounting | undefined>;
     messages(): Promise<Message[]>;
+    transcript(options?: TranscriptOptions): Promise<string>;
     context(): Promise<ContextSnapshot>;
     setModel(modelId: string): Promise<void>;
     setMode(mode: string): Promise<void>;
@@ -70,7 +74,9 @@ export declare class SessionHandle {
     setLabel(targetId: string, label: string | null): Promise<void>;
     moveLeaf(targetId: string | null): Promise<void>;
     commitMessage(): Promise<string | undefined>;
-    tools(): Promise<unknown[]>;
+    tools(): Promise<ToolCatalogEntry[]>;
+    executeTool(name: string, argumentsValue?: Record<string, JSONValue>): Promise<DirectToolResult>;
+    executeToolCommand(command: string): Promise<DirectToolResult>;
     answerPermission(requestId: string, reply: "once" | "always" | "reject", message?: string): Promise<void>;
     answerQuestion(requestId: string, answers: QuestionAnswer[] | null): Promise<void>;
     pendingPermissions(): Promise<ServerEvent[]>;

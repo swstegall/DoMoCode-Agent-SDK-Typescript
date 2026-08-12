@@ -2,12 +2,15 @@ import { Transport, encodePathSegment } from "./transport.js";
 import { NotFoundError, SessionAlreadyAcquiredError } from "./types/errors.js";
 import { SessionHandle } from "./session.js";
 import { isRecord, requiredString } from "./types/common.js";
+import { CatalogClient } from "./catalogs.js";
 export class DoMoCodeClient {
     transport;
     sessions;
+    catalogs;
     constructor(options) {
         this.transport = new Transport(options);
         this.sessions = new SessionRegistry(this);
+        this.catalogs = new CatalogClient(this.transport);
     }
     get baseURL() { return this.transport.baseURL; }
     get clientId() { return this.transport.clientId; }

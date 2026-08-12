@@ -344,7 +344,7 @@ export class MockDoMoServer {
     }
     executeTool(session, body) {
         const command = typeof body.command === "string" ? body.command.trim() : "";
-        const toolName = command.split(/\s+/, 1)[0] ?? "unknown";
+        const toolName = (command.split(/\s+/, 1)[0] ?? "unknown").replace(/^\//, "");
         this.emit(session.ref.id, { type: "tool_start", id: uuidv7(), name: toolName, arguments: {} });
         return jsonResponse({ toolName, output: `mock ${command}`, isError: false, imageCount: 0 });
     }
@@ -397,7 +397,7 @@ export class MockDoMoServer {
         return jsonResponse(target);
     }
     tools(_session) {
-        return [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } }];
+        return [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
     }
     status(session) {
         return { sessionId: session.ref.id, running: session.running, pendingPermissionIds: [...session.permissions.keys()], pendingQuestionIds: [...session.questions.keys()], subscribers: session.streams.size, queuedMessageCount: session.queued, mode: session.mode, agent: "default" };

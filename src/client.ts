@@ -3,16 +3,19 @@ import { NotFoundError, SessionAlreadyAcquiredError } from "./types/errors.ts";
 import type { ServerCapabilities, SessionRef, SessionSummary } from "./types/sessions.ts";
 import { SessionHandle, type SessionAcquireOptions, type SessionAttachOptions } from "./session.ts";
 import { isRecord, requiredString } from "./types/common.ts";
+import { CatalogClient } from "./catalogs.ts";
 
 export interface DoMoCodeClientOptions extends TransportOptions {}
 
 export class DoMoCodeClient {
   readonly transport: Transport;
   readonly sessions: SessionRegistry;
+  readonly catalogs: CatalogClient;
 
   constructor(options: DoMoCodeClientOptions) {
     this.transport = new Transport(options);
     this.sessions = new SessionRegistry(this);
+    this.catalogs = new CatalogClient(this.transport);
   }
 
   get baseURL(): string { return this.transport.baseURL; }

@@ -23,3 +23,5 @@ The implementation follows [DOMOCODE_SDK_PLAN.md](../DOMOCODE_SDK_PLAN.md). The 
 
 Interaction handling is documented in [`docs/interactions.md`](docs/interactions.md). Sessions
 provide both capability-object asks (`ask.allow()`, `ask.answer()`) and low-level answer methods.
+
+Catalogs, direct tools, and transcript export are covered in [`docs/catalogs.md`](docs/catalogs.md).

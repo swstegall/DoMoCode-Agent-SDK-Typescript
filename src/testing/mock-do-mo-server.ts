@@ -319,7 +319,7 @@ export class MockDoMoServer {
 
   private executeTool(session: MockSession, body: Record<string, unknown>): Response {
     const command = typeof body.command === "string" ? body.command.trim() : "";
-    const toolName = command.split(/\s+/, 1)[0] ?? "unknown";
+    const toolName = (command.split(/\s+/, 1)[0] ?? "unknown").replace(/^\//, "");
     this.emit(session.ref.id, { type: "tool_start", id: uuidv7(), name: toolName, arguments: {} });
     return jsonResponse({ toolName, output: `mock ${command}`, isError: false, imageCount: 0 });
   }
@@ -375,7 +375,7 @@ export class MockDoMoServer {
   }
 
   private tools(_session: MockSession): ToolCatalogEntry[] {
-    return [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } }];
+    return [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
   }
 
   private status(session: MockSession): SessionStatus {

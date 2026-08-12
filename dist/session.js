@@ -6,6 +6,8 @@ import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredStrin
 import { asDecimalString } from "./types/decimal.js";
 import { AttachRejectedError, AuthorityUnavailableError, ConflictError, DoMoError, NotFoundError, RunStalledError, RunStateRaceError, SessionAlreadyAcquiredError, SessionBusyError } from "./types/errors.js";
 import { InteractionRuntime } from "./interactionRuntime.js";
+import { decodeToolCatalog } from "./catalogs.js";
+import { renderTranscript } from "./transcript.js";
 export class SessionHandle {
     client;
     ref;
@@ -134,6 +136,9 @@ export class SessionHandle {
         const value = await this.client.transport.json(sessionPath(this.id, "/messages"));
         return requiredArray(value, "messages").map(decodeMessage);
     }
+    async transcript(options = {}) {
+        return renderTranscript(await this.messages(), options);
+    }
     async context() {
         const value = await this.client.transport.json(sessionPath(this.id, "/context"));
         if (!isRecord(value))
@@ -167,7 +172,18 @@ export class SessionHandle {
         const value = await this.client.transport.json(sessionPath(this.id, "/diff/commit-message"), { method: "POST" });
         return isRecord(value) && typeof value.message === "string" ? value.message : undefined;
     }
-    async tools() { const value = await this.client.transport.json(sessionPath(this.id, "/tools")); return requiredArray(value, "tools"); }
+    async tools() {
+        return decodeToolCatalog(await this.client.transport.json(sessionPath(this.id, "/tools")));
+    }
+    async executeTool(name, argumentsValue = {}) {
+        if (!/^[A-Za-z0-9_.:-]+$/.test(name))
+            throw new TypeError("Tool name contains unsupported direct-command characters");
+        return this.executeToolCommand(`/${name} ${JSON.stringify(argumentsValue)}`);
+    }
+    async executeToolCommand(command) {
+        const value = await this.client.transport.json(sessionPath(this.id, "/tool"), { method: "POST", body: { command } });
+        return decodeDirectToolResult(value);
+    }
     async answerPermission(requestId, reply, message) {
         const body = { requestID: requestId, reply, ...(message === undefined ? {} : { message }) };
         await this.client.transport.json(sessionPath(this.id, "/permission"), { method: "POST", body });
@@ -394,4 +410,14 @@ export function decodeAccounting(value) {
 }
 function sessionPath(id, suffix = "") { return `/session/${encodePathSegment(id)}${suffix}`; }
 function delay(milliseconds) { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
+function decodeDirectToolResult(value) {
+    if (!isRecord(value))
+        throw new TypeError("Direct tool result must be an object");
+    return {
+        toolName: requiredString(value.toolName, "toolName"),
+        output: requiredString(value.output, "output"),
+        isError: requiredBoolean(value.isError, "isError"),
+        imageCount: requiredNumber(value.imageCount ?? 0, "imageCount")
+    };
+}
 //# sourceMappingURL=session.js.map
