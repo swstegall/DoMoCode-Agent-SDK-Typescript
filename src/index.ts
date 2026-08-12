@@ -4,6 +4,9 @@ export const SDK_VERSION = "0.1.0" as const;
 /** The DoMoCode wire protocol version supported by this SDK. */
 export const PROTOCOL_VERSION = 1 as const;
 
+export * from "./transport.ts";
+export * from "./uuid.ts";
+
 export * from "./types/asks.ts";
 export * from "./types/catalogs.ts";
 export * from "./types/common.ts";
