@@ -1,0 +1,1 @@
+{"type":"permission_request","id":"per_1","sessionId":"session-1","permission":"bash","patterns":["git status"],"always":[],"metadata":{"command":"git status","filepaths":["README.md"]},"disableAlways":false}

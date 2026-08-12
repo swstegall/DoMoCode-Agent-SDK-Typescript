@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/swstegall/DoMoCode-Agent-SDK-Typescript/schema/interactions.schema.json",
+  "title": "DoMoCode pending interactions",
+  "description": "The kind space is intentionally open for additive interaction types.",
+  "oneOf": [
+    {"$ref": "#/$defs/permission"},
+    {"$ref": "#/$defs/question"},
+    {"$ref": "#/$defs/unknown"}
+  ],
+  "$defs": {
+    "permission": {
+      "type": "object",
+      "required": ["kind", "id", "sessionId", "permission", "patterns", "always", "metadata", "disableAlways"],
+      "properties": {
+        "kind": {"const": "permission"}, "id": {"type": "string"}, "sessionId": {"type": "string"}, "permission": {"type": "string"},
+        "patterns": {"type": "array", "items": {"type": "string"}}, "always": {"type": "array", "items": {"type": "string"}},
+        "metadata": {"type": "object"}, "disableAlways": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "question": {
+      "type": "object",
+      "required": ["kind", "id", "sessionId", "questions"],
+      "properties": {"kind": {"const": "question"}, "id": {"type": "string"}, "sessionId": {"type": "string"}, "questions": {"type": "array"}},
+      "additionalProperties": false
+    },
+    "unknown": {
+      "type": "object",
+      "required": ["kind", "id", "raw"],
+      "properties": {"kind": {"type": "string", "not": {"enum": ["permission", "question"]}}, "id": {"type": "string"}, "sessionId": {"type": "string"}, "raw": {}}
+    }
+  }
+}

@@ -1,0 +1,1 @@
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Finished."}],"model":"mock-model","usage":{"input":3,"output":2,"cacheRead":0,"cacheWrite":0,"cost":{"input":"0","output":"0","cacheRead":"0","cacheWrite":"0"}},"stopReason":"stop"}}
