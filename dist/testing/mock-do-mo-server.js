@@ -34,6 +34,7 @@ export class MockDoMoServer {
     autoComplete;
     promptHandler;
     toolCatalog;
+    skillCatalog;
     sessionsById = new Map();
     closed = false;
     constructor(options = {}) {
@@ -44,6 +45,7 @@ export class MockDoMoServer {
         this.autoComplete = options.autoComplete ?? true;
         this.promptHandler = options.promptHandler;
         this.toolCatalog = options.toolCatalog ?? [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
+        this.skillCatalog = options.skillCatalog ?? [];
         this.fetch = this.handleFetch.bind(this);
     }
     transport(options = {}) {
@@ -237,6 +239,10 @@ export class MockDoMoServer {
             return jsonResponse({ commands: [{ name: "help", description: "Mock command", source: "builtIn" }] });
         if (method === "GET" && parts[0] === "agents")
             return jsonResponse([{ name: "default", description: "Mock agent", mode: "build", source: "builtIn" }]);
+        if (method === "GET" && parts[0] === "skills") {
+            const includeBody = url.searchParams.get("include") === "body";
+            return jsonResponse(this.skillCatalog.map((skill) => includeBody || skill.body === undefined ? skill : (({ body: _body, ...metadata }) => metadata)(skill)));
+        }
         if (method === "GET" && parts[0] === "models")
             return jsonResponse([{ id: "mock-model", provider: "mock" }]);
         if (method === "GET" && parts[0] === "memory")

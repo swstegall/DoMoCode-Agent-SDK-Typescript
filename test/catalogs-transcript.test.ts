@@ -28,6 +28,27 @@ test("catalogs decode the live server surfaces and model reads use a TTL", async
   server.close();
 });
 
+test("skills catalog keeps bodies opt-in", async () => {
+  const server = new MockDoMoServer({ skillCatalog: [{
+    name: "review",
+    description: "Review changes",
+    keywords: ["diff"],
+    argumentHint: "focus",
+    disableModelInvocation: true,
+    toolAllowlist: ["read"],
+    source: "project",
+    body: "Secret skill instructions"
+  }] });
+  const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch });
+  const metadata = await client.catalogs.skills();
+  assert.equal(metadata[0]?.body, undefined);
+  assert.equal(metadata[0]?.disableModelInvocation, true);
+  const withBody = await client.catalogs.skills({ includeBody: true });
+  assert.equal(withBody[0]?.body, "Secret skill instructions");
+  await client.close();
+  server.close();
+});
+
 test("session tools and direct execution round-trip through the live catalog", async () => {
   const server = new MockDoMoServer();
   const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch, clientId: "tool-client", owner: "tests" });

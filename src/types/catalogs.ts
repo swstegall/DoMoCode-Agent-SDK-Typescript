@@ -39,8 +39,19 @@ export interface CommandDescriptor {
 
 export interface CommandRegistry { commands: CommandDescriptor[]; [key: string]: unknown }
 export interface AgentProfileSummary { name: string; description?: string; mode: string; source: PromptResourceSource }
+export interface SkillDescriptor {
+  name: string;
+  description?: string;
+  keywords: string[];
+  argumentHint?: string;
+  disableModelInvocation: boolean;
+  toolAllowlist?: string[];
+  source: PromptResourceSource;
+  body?: string;
+  [key: string]: unknown;
+}
 export interface ModelOption { id: string; provider?: string; contextWindow?: number; [key: string]: unknown }
 export type ProjectMemoryKind = OpenEnum<"project" | "environment" | "correction" | "sessionDigest">;
 export interface ProjectMemoryRecord { id: string; kind: ProjectMemoryKind; title: string; content: string; createdAt: string; updatedAt: string; sourceSessionID?: string; tags: string[] }
 export type MemoryRecord = ProjectMemoryRecord;
-export interface CatalogSnapshot { tools: ToolCatalogEntry[]; commands: CommandDescriptor[]; skills: CommandDescriptor[]; agents: AgentProfileSummary[]; models: ModelOption[] }
+export interface CatalogSnapshot { tools: ToolCatalogEntry[]; commands: CommandDescriptor[]; skills: SkillDescriptor[]; agents: AgentProfileSummary[]; models: ModelOption[] }

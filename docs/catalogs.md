@@ -39,6 +39,17 @@ await session.invokePromptCommand(mcpCommands[0].name, { topic: "Swift" });
 The server fetches and renders the MCP prompt before handing it to the agent, so prompt
 permissions, events, transcripts, and settlement remain identical to an ordinary prompt.
 
+Skills are a separate typed catalog. Metadata is the default projection; request `includeBody`
+only when the caller deliberately needs the server-owned Markdown body:
+
+```ts
+const skills = await client.catalogs.skills();
+const skillWithBody = await client.catalogs.skills({ includeBody: true });
+```
+
+The default response never includes `body`, which keeps large or sensitive skill instructions
+out of ordinary palette refreshes.
+
 `session.transcript()` and the standalone `renderTranscript()` helpers produce deterministic
 Markdown or escaped HTML from the lossless `/messages` projection. Base64 image bytes are
 never embedded; image media types are emitted as placeholders. Tool calls/results and

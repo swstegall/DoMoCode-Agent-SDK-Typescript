@@ -7,7 +7,7 @@ import type { QuestionPrompt } from "../types/asks.ts";
 import type { ServerEvent } from "../types/events.ts";
 import type { Message } from "../types/messages.ts";
 import type { SessionClientAttachment, SessionRef, SessionStatus } from "../types/sessions.ts";
-import type { ToolCatalogEntry } from "../types/catalogs.ts";
+import type { SkillDescriptor, ToolCatalogEntry } from "../types/catalogs.ts";
 
 export interface MockPromptContext {
   sessionId: string;
@@ -30,6 +30,7 @@ export interface MockDoMoServerOptions {
   promptHandler?: (context: MockPromptContext) => Promise<MockPromptResult | void> | MockPromptResult | void;
   capabilities?: string[];
   toolCatalog?: ToolCatalogEntry[];
+  skillCatalog?: SkillDescriptor[];
 }
 
 interface SequencedEvent { sequence: number; event: ServerEvent }
@@ -89,6 +90,7 @@ export class MockDoMoServer {
   private readonly autoComplete: boolean;
   private readonly promptHandler: MockDoMoServerOptions["promptHandler"];
   private readonly toolCatalog: ToolCatalogEntry[];
+  private readonly skillCatalog: SkillDescriptor[];
   private readonly sessionsById = new Map<string, MockSession>();
   private closed = false;
 
@@ -100,6 +102,7 @@ export class MockDoMoServer {
     this.autoComplete = options.autoComplete ?? true;
     this.promptHandler = options.promptHandler;
     this.toolCatalog = options.toolCatalog ?? [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
+    this.skillCatalog = options.skillCatalog ?? [];
     this.fetch = this.handleFetch.bind(this);
   }
 
@@ -225,6 +228,10 @@ export class MockDoMoServer {
   private handleGlobal(method: string, parts: string[], url: URL, init?: RequestInit): Response {
     if (method === "GET" && parts[0] === "commands") return jsonResponse({ commands: [{ name: "help", description: "Mock command", source: "builtIn" }] });
     if (method === "GET" && parts[0] === "agents") return jsonResponse([{ name: "default", description: "Mock agent", mode: "build", source: "builtIn" }]);
+    if (method === "GET" && parts[0] === "skills") {
+      const includeBody = url.searchParams.get("include") === "body";
+      return jsonResponse(this.skillCatalog.map((skill) => includeBody || skill.body === undefined ? skill : (({ body: _body, ...metadata }) => metadata)(skill)));
+    }
     if (method === "GET" && parts[0] === "models") return jsonResponse([{ id: "mock-model", provider: "mock" }]);
     if (method === "GET" && parts[0] === "memory") return jsonResponse([]);
     return errorResponse(404, `route not found: ${url.pathname}`);

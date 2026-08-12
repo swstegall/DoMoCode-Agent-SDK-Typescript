@@ -1,8 +1,9 @@
 import type { Transport } from "./transport.ts";
-import { isRecord, requiredArray, requiredNumber, requiredString } from "./types/common.ts";
-import type { AgentProfileSummary, CatalogSource, CommandDescriptor, CommandKind, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, PromptResourceSource, ToolCatalogEntry, ToolCatalogFilter, ToolPermissionState } from "./types/catalogs.ts";
+import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString } from "./types/common.ts";
+import type { AgentProfileSummary, CatalogSource, CommandDescriptor, CommandKind, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, PromptResourceSource, SkillDescriptor, ToolCatalogEntry, ToolCatalogFilter, ToolPermissionState } from "./types/catalogs.ts";
 
 export interface ModelCatalogOptions { maxAgeMs?: number }
+export interface SkillCatalogOptions { includeBody?: boolean }
 
 /** Client-side view of the server-owned command, agent, model, and memory catalogs. */
 export class CatalogClient {
@@ -16,6 +17,11 @@ export class CatalogClient {
 
   async agents(): Promise<AgentProfileSummary[]> {
     return requiredArray(await this.transport.json<unknown>("/agents"), "agents").map(decodeAgentProfileSummary);
+  }
+
+  async skills(options: SkillCatalogOptions = {}): Promise<SkillDescriptor[]> {
+    const path = options.includeBody ? "/skills?include=body" : "/skills";
+    return requiredArray(await this.transport.json<unknown>(path), "skills").map(decodeSkillDescriptor);
   }
 
   async models(options: ModelCatalogOptions = {}): Promise<ModelOption[]> {
@@ -68,6 +74,21 @@ export function decodeAgentProfileSummary(value: unknown): AgentProfileSummary {
     ...(value.description === undefined || value.description === null ? {} : { description: requiredString(value.description, "agent.description") }),
     mode: requiredString(value.mode, "agent.mode"),
     source: requiredString(value.source, "agent.source") as PromptResourceSource
+  };
+}
+
+export function decodeSkillDescriptor(value: unknown): SkillDescriptor {
+  if (!isRecord(value)) throw new TypeError("Skill descriptor must be an object");
+  return {
+    ...value,
+    name: requiredString(value.name, "skill.name"),
+    ...(value.description === undefined || value.description === null ? {} : { description: requiredString(value.description, "skill.description") }),
+    keywords: value.keywords === undefined || value.keywords === null ? [] : requiredArray(value.keywords, "skill.keywords").map((item) => requiredString(item, "skill keyword")),
+    ...(value.argumentHint === undefined || value.argumentHint === null ? {} : { argumentHint: requiredString(value.argumentHint, "skill.argumentHint") }),
+    disableModelInvocation: requiredBoolean(value.disableModelInvocation, "skill.disableModelInvocation"),
+    ...(value.toolAllowlist === undefined || value.toolAllowlist === null ? {} : { toolAllowlist: requiredArray(value.toolAllowlist, "skill.toolAllowlist").map((item) => requiredString(item, "skill tool allow-list entry")) }),
+    source: requiredString(value.source, "skill.source") as PromptResourceSource,
+    ...(value.body === undefined || value.body === null ? {} : { body: requiredString(value.body, "skill.body") })
   };
 }
 

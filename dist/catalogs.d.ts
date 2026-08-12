@@ -1,7 +1,10 @@
 import type { Transport } from "./transport.ts";
-import type { AgentProfileSummary, CommandDescriptor, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, ToolCatalogEntry, ToolCatalogFilter } from "./types/catalogs.ts";
+import type { AgentProfileSummary, CommandDescriptor, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, SkillDescriptor, ToolCatalogEntry, ToolCatalogFilter } from "./types/catalogs.ts";
 export interface ModelCatalogOptions {
     maxAgeMs?: number;
+}
+export interface SkillCatalogOptions {
+    includeBody?: boolean;
 }
 /** Client-side view of the server-owned command, agent, model, and memory catalogs. */
 export declare class CatalogClient {
@@ -10,6 +13,7 @@ export declare class CatalogClient {
     constructor(transport: Transport);
     commands(): Promise<CommandRegistry>;
     agents(): Promise<AgentProfileSummary[]>;
+    skills(options?: SkillCatalogOptions): Promise<SkillDescriptor[]>;
     models(options?: ModelCatalogOptions): Promise<ModelOption[]>;
     invalidateModels(): void;
     memory(): Promise<ProjectMemoryRecord[]>;
@@ -23,6 +27,7 @@ export declare class CatalogClient {
 export declare function decodeCommandRegistry(value: unknown): CommandRegistry;
 export declare function decodeCommandDescriptor(value: unknown): CommandDescriptor;
 export declare function decodeAgentProfileSummary(value: unknown): AgentProfileSummary;
+export declare function decodeSkillDescriptor(value: unknown): SkillDescriptor;
 export declare function decodeModelOption(value: unknown): ModelOption;
 export declare function decodeProjectMemoryRecord(value: unknown): ProjectMemoryRecord;
 export declare function decodeToolCatalogEntry(value: unknown): ToolCatalogEntry;

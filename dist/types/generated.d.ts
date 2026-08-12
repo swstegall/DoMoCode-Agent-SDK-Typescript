@@ -1,5 +1,5 @@
 export declare const GENERATED_PROTOCOL_VERSION: 1;
-export declare const GENERATED_ROUTES: readonly ["/session", "/sessions", "/session/{id}/events", "/session/{id}/status", "/session/{id}/permissions", "/session/{id}/questions", "/session/{id}/messages", "/session/{id}/context", "/session/{id}/prompt", "/session/{id}/steer", "/session/{id}/abort", "/session/{id}/force-clear", "/session/{id}/permission", "/session/{id}/question", "/session/{id}/tools", "/session/{id}/tool", "/session/{id}/model", "/session/{id}/mode", "/session/{id}/fork", "/session/{id}/clone", "/session/{id}/rename", "/session/{id}/title", "/session/{id}/label", "/session/{id}/leaf", "/session/{id}/compact", "/session/{id}/undo", "/session/{id}/redo", "/session/{id}/tree", "/session/{id}/children", "/session/{id}/timeline", "/session/{id}/diff", "/session/{id}/workspace-status", "/session/{id}/client/attach", "/session/{id}/client/detach", "/session/{id}/client/authority", "/session/{id}/client/authority/release", "/session/{id}/client/authority/transfer", "/session/{id}/client/cursor", "/session/{id}/client/events", "/session/{id}/client/export", "/commands", "/agents", "/models", "/memory", "/mcp", "/mcp/{server}/resources", "/mcp/{server}/resource-templates", "/mcp/{server}/resource", "/mcp/{server}/health", "/handoffs", "/handoff", "/jobs", "/automations", "/workflows", "/capabilities"];
+export declare const GENERATED_ROUTES: readonly ["/session", "/sessions", "/session/{id}/events", "/session/{id}/status", "/session/{id}/permissions", "/session/{id}/questions", "/session/{id}/messages", "/session/{id}/context", "/session/{id}/prompt", "/session/{id}/steer", "/session/{id}/abort", "/session/{id}/force-clear", "/session/{id}/permission", "/session/{id}/question", "/session/{id}/tools", "/session/{id}/tool", "/session/{id}/model", "/session/{id}/mode", "/session/{id}/fork", "/session/{id}/clone", "/session/{id}/rename", "/session/{id}/title", "/session/{id}/label", "/session/{id}/leaf", "/session/{id}/compact", "/session/{id}/undo", "/session/{id}/redo", "/session/{id}/tree", "/session/{id}/children", "/session/{id}/timeline", "/session/{id}/diff", "/session/{id}/workspace-status", "/session/{id}/client/attach", "/session/{id}/client/detach", "/session/{id}/client/authority", "/session/{id}/client/authority/release", "/session/{id}/client/authority/transfer", "/session/{id}/client/cursor", "/session/{id}/client/events", "/session/{id}/client/export", "/commands", "/agents", "/models", "/memory", "/skills", "/mcp", "/mcp/{server}/resources", "/mcp/{server}/resource-templates", "/mcp/{server}/resource", "/mcp/{server}/health", "/handoffs", "/handoff", "/jobs", "/automations", "/workflows", "/capabilities"];
 export type ServerEventName = "connected" | "heartbeat" | "agent_start" | "agent_end" | "turn_start" | "turn_end" | "message_start" | "message_delta" | "message_end" | "tool_start" | "tool_end" | "permission_request" | "permission_resolved" | "question_request" | "question_resolved" | "queue_update" | "notice" | "subagent" | "mcp_changed" | (string & {});
 export type AgentEndReason = "completed" | "errored" | "aborted" | "max_turns_reached" | "stopped_by_hook" | "terminated_by_tool" | "no_progress" | "cost_limit_reached" | (string & {});
 export type InteractionKind = "permission" | "question" | "oauth" | "client_tool" | (string & {});
@@ -40,5 +40,16 @@ export interface Capabilities {
     "version": string;
     "protocolVersion": number;
     "capabilities": ReadonlyArray<string>;
+}
+export interface SkillDescriptor {
+    "name": string;
+    "description"?: string;
+    "keywords": ReadonlyArray<string>;
+    "argumentHint"?: string;
+    "disableModelInvocation": boolean;
+    "toolAllowlist"?: ReadonlyArray<string>;
+    "source": string;
+    "body"?: string;
+    [key: string]: unknown;
 }
 //# sourceMappingURL=generated.d.ts.map

@@ -42,6 +42,17 @@ export interface AgentProfileSummary {
     mode: string;
     source: PromptResourceSource;
 }
+export interface SkillDescriptor {
+    name: string;
+    description?: string;
+    keywords: string[];
+    argumentHint?: string;
+    disableModelInvocation: boolean;
+    toolAllowlist?: string[];
+    source: PromptResourceSource;
+    body?: string;
+    [key: string]: unknown;
+}
 export interface ModelOption {
     id: string;
     provider?: string;
@@ -63,7 +74,7 @@ export type MemoryRecord = ProjectMemoryRecord;
 export interface CatalogSnapshot {
     tools: ToolCatalogEntry[];
     commands: CommandDescriptor[];
-    skills: CommandDescriptor[];
+    skills: SkillDescriptor[];
     agents: AgentProfileSummary[];
     models: ModelOption[];
 }

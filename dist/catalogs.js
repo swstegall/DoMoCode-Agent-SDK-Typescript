@@ -1,4 +1,4 @@
-import { isRecord, requiredArray, requiredNumber, requiredString } from "./types/common.js";
+import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString } from "./types/common.js";
 /** Client-side view of the server-owned command, agent, model, and memory catalogs. */
 export class CatalogClient {
     transport;
@@ -11,6 +11,10 @@ export class CatalogClient {
     }
     async agents() {
         return requiredArray(await this.transport.json("/agents"), "agents").map(decodeAgentProfileSummary);
+    }
+    async skills(options = {}) {
+        const path = options.includeBody ? "/skills?include=body" : "/skills";
+        return requiredArray(await this.transport.json(path), "skills").map(decodeSkillDescriptor);
     }
     async models(options = {}) {
         const maxAgeMs = options.maxAgeMs ?? 30_000;
@@ -61,6 +65,21 @@ export function decodeAgentProfileSummary(value) {
         ...(value.description === undefined || value.description === null ? {} : { description: requiredString(value.description, "agent.description") }),
         mode: requiredString(value.mode, "agent.mode"),
         source: requiredString(value.source, "agent.source")
+    };
+}
+export function decodeSkillDescriptor(value) {
+    if (!isRecord(value))
+        throw new TypeError("Skill descriptor must be an object");
+    return {
+        ...value,
+        name: requiredString(value.name, "skill.name"),
+        ...(value.description === undefined || value.description === null ? {} : { description: requiredString(value.description, "skill.description") }),
+        keywords: value.keywords === undefined || value.keywords === null ? [] : requiredArray(value.keywords, "skill.keywords").map((item) => requiredString(item, "skill keyword")),
+        ...(value.argumentHint === undefined || value.argumentHint === null ? {} : { argumentHint: requiredString(value.argumentHint, "skill.argumentHint") }),
+        disableModelInvocation: requiredBoolean(value.disableModelInvocation, "skill.disableModelInvocation"),
+        ...(value.toolAllowlist === undefined || value.toolAllowlist === null ? {} : { toolAllowlist: requiredArray(value.toolAllowlist, "skill.toolAllowlist").map((item) => requiredString(item, "skill tool allow-list entry")) }),
+        source: requiredString(value.source, "skill.source"),
+        ...(value.body === undefined || value.body === null ? {} : { body: requiredString(value.body, "skill.body") })
     };
 }
 export function decodeModelOption(value) {
