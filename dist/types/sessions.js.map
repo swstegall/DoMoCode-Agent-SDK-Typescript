@@ -1,1 +1,1 @@
-{"version":3,"file":"sessions.js","sourceRoot":"","sources":["../../src/types/sessions.ts"],"names":[],"mappings":"AAEA,OAAO,EAAE,YAAY,EAAyC,MAAM,cAAc,CAAC;AA6BnF,MAAM,UAAU,kBAAkB,CAAC,UAAyC;IAC1E,OAAO,UAAU,CAAC,CAAC,CAAC,YAAY,CAAC,UAAU,CAAC,SAAS,CAAC,CAAC,CAAC,CAAC,SAAS,CAAC;AACrE,CAAC"}
+{"version":3,"file":"sessions.js","sourceRoot":"","sources":["../../src/types/sessions.ts"],"names":[],"mappings":"AAEA,OAAO,EAAE,YAAY,EAAyC,MAAM,cAAc,CAAC;AAuCnF,MAAM,UAAU,kBAAkB,CAAC,UAAyC;IAC1E,OAAO,UAAU,CAAC,CAAC,CAAC,YAAY,CAAC,UAAU,CAAC,SAAS,CAAC,CAAC,CAAC,CAAC,SAAS,CAAC;AACrE,CAAC"}

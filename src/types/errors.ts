@@ -81,6 +81,31 @@ export class AttachRejectedError extends DoMoApiError {
   constructor(sessionId: string, options: ApiErrorOptions) { super("The session was created but ledger attachment was rejected.", options); this.name = "AttachRejectedError"; this.sessionId = sessionId; }
 }
 
+export class AuthorityUnavailableError extends DoMoError {
+  readonly sessionId: string;
+  readonly holder: unknown;
+  constructor(sessionId: string, holder?: unknown) { super(`Session ${sessionId} is attached to another authority client.`); this.name = "AuthorityUnavailableError"; this.sessionId = sessionId; this.holder = holder; }
+}
+
+export class SessionBusyError extends DoMoApiError {
+  constructor(options: ApiErrorOptions) { super("The DoMoCode session is busy.", options); this.name = "SessionBusyError"; }
+}
+
+export class RunStateRaceError extends DoMoError {
+  readonly route: string;
+  constructor(route: string) { super(`The session changed run state while sending through ${route}; the one permitted route flip was exhausted.`); this.name = "RunStateRaceError"; this.route = route; }
+}
+
+export class SessionAlreadyAcquiredError extends DoMoError {
+  readonly sessionId: string;
+  constructor(sessionId: string) { super(`Session ${sessionId} is already acquired exclusively in this process.`); this.name = "SessionAlreadyAcquiredError"; this.sessionId = sessionId; }
+}
+
+export class RunStalledError extends DoMoError {
+  readonly pendingInteractions: unknown[];
+  constructor(pendingInteractions: unknown[]) { super("The run is waiting for an unanswered interaction."); this.name = "RunStalledError"; this.pendingInteractions = pendingInteractions; }
+}
+
 export function redactSecrets(value: string): string {
   return value
     .replace(/(authorization\s*:\s*bearer\s+)[^\s,;]+/gi, "$1[REDACTED]")

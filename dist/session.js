@@ -1,0 +1,290 @@
+import { EventEngine } from "./eventEngine.js";
+import { Transport, encodePathSegment } from "./transport.js";
+import { decodeMessage } from "./types/messages.js";
+import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString } from "./types/common.js";
+import { asDecimalString } from "./types/decimal.js";
+import { AttachRejectedError, AuthorityUnavailableError, ConflictError, DoMoError, NotFoundError, RunStalledError, RunStateRaceError, SessionAlreadyAcquiredError, SessionBusyError } from "./types/errors.js";
+export class SessionHandle {
+    client;
+    ref;
+    forget;
+    attachment;
+    engine;
+    disposed = false;
+    runLock = false;
+    leaseRelease;
+    leaseMode;
+    cursor = 0;
+    constructor(client, ref, forget) { this.client = client; this.ref = ref; this.forget = forget; }
+    get id() { return this.ref.id; }
+    get path() { return this.ref.path; }
+    get role() { return this.attachment?.role; }
+    get clientAttachment() { return this.attachment; }
+    get eventsEngine() { return this.engine; }
+    setLease(mode, release) {
+        if (this.leaseRelease && mode === "exclusive")
+            throw new SessionAlreadyAcquiredError(this.id);
+        this.leaseMode = mode;
+        this.leaseRelease = release;
+    }
+    async release() { this.leaseRelease?.(); this.leaseRelease = undefined; this.leaseMode = undefined; }
+    async attach(options = {}) {
+        this.assertUsable();
+        const authority = options.authority ?? "require";
+        try {
+            const resumed = await this.client.transport.json("/session", { method: "POST", body: { resume: this.id } });
+            this.ref = decodeRef(resumed, this.ref);
+        }
+        catch (error) {
+            if (!(error instanceof NotFoundError))
+                throw error;
+            await this.status();
+        }
+        const path = `/session/${encodePathSegment(this.id)}/client/attach`;
+        let attachment;
+        try {
+            const value = await this.client.transport.json(path, { method: "POST", body: { clientID: this.client.clientId, owner: this.client.owner, requestAuthority: authority !== "observer" } });
+            attachment = decodeAttachment(value, this.id);
+        }
+        catch (error) {
+            if (!(error instanceof NotFoundError))
+                throw error;
+            // A 404 is only treated as a pre-ledger server after liveness was checked.
+            await this.status();
+            if (authority === "require")
+                throw new AuthorityUnavailableError(this.id);
+            attachment = { clientId: this.client.clientId, sessionId: this.id, owner: this.client.owner, role: "observer", active: true, eventCursor: this.cursor };
+        }
+        if (authority === "require" && attachment.role !== "authority") {
+            const holder = await this.authority().catch(() => undefined);
+            throw new AuthorityUnavailableError(this.id, holder);
+        }
+        this.attachment = attachment;
+        this.cursor = Math.max(this.cursor, attachment.eventCursor ?? 0);
+        if (!this.engine) {
+            this.engine = new EventEngine({
+                open: (after, signal) => this.client.transport.request(`${sessionPath(this.id, `/events?after=${after}`)}`, { signal, stream: true }),
+                revive: async (signal) => { await this.client.transport.json("/session", { method: "POST", body: { resume: this.id }, signal }); },
+                reconcile: (signal) => this.reconcile(signal)
+            });
+            this.engine.start();
+        }
+        return attachment;
+    }
+    events() { this.assertUsable(); if (!this.engine)
+        throw new Error("Session is not attached"); return this.engine; }
+    onEvent(listener) { return this.events().onEvent(listener); }
+    async prompt(text, options = {}) { await this.postPrompt("prompt", text, options); }
+    async steer(text, options = {}) { await this.postPrompt("steer", text, options); }
+    async send(text, options = {}) {
+        const running = (await this.status()).running;
+        const preferSteer = options.preferSteer ?? running;
+        const first = preferSteer ? "steer" : "prompt";
+        const second = preferSteer ? "prompt" : "steer";
+        try {
+            await this.postPrompt(first, text, options);
+        }
+        catch (error) {
+            if (!(error instanceof ConflictError) || !error.route.endsWith(`/${first}`))
+                throw error;
+            try {
+                await this.postPrompt(second, text, options);
+            }
+            catch (retryError) {
+                if (retryError instanceof ConflictError && retryError.route.endsWith(`/${second}`))
+                    throw new RunStateRaceError(retryError.route);
+                throw retryError;
+            }
+        }
+    }
+    async abort() {
+        const value = await this.client.transport.json(sessionPath(this.id, "/abort"), { method: "POST" });
+        return !isRecord(value) || typeof value.aborted !== "boolean" ? true : value.aborted;
+    }
+    async forceClear() {
+        const value = await this.client.transport.json(sessionPath(this.id, "/force-clear"), { method: "POST" });
+        return !isRecord(value) || typeof value.cleared !== "boolean" ? true : value.cleared;
+    }
+    async status() {
+        const value = await this.client.transport.json(sessionPath(this.id, "/status"));
+        return decodeStatus(value, this.id);
+    }
+    async accounting() { return (await this.status()).accounting; }
+    async messages() {
+        const value = await this.client.transport.json(sessionPath(this.id, "/messages"));
+        return requiredArray(value, "messages").map(decodeMessage);
+    }
+    async context() {
+        const value = await this.client.transport.json(sessionPath(this.id, "/context"));
+        if (!isRecord(value))
+            throw new TypeError("Context snapshot must be an object");
+        return { messages: requiredArray(value.messages, "context.messages").map(decodeMessage), ...(value.accounting === undefined || value.accounting === null ? {} : { accounting: decodeAccounting(value.accounting) }) };
+    }
+    async setModel(modelId) { await this.client.transport.json(sessionPath(this.id, "/model"), { method: "POST", body: { modelID: modelId } }); }
+    async setMode(mode) { await this.client.transport.json(sessionPath(this.id, "/mode"), { method: "POST", body: { mode } }); }
+    async tools() { const value = await this.client.transport.json(sessionPath(this.id, "/tools")); return requiredArray(value, "tools"); }
+    async settled(options = {}) {
+        const idle = options.maxIdleMs ?? 5_000;
+        const initial = await this.status();
+        if (!initial.running)
+            return { stopReason: "idle", status: initial };
+        const pending = [];
+        let reason;
+        const unsubscribe = this.engine?.onEvent((event) => {
+            if (event.type === "agent_end" && "reason" in event)
+                reason = event.reason;
+        });
+        const started = Date.now();
+        try {
+            while (Date.now() - started < idle) {
+                const current = await this.status();
+                if (!current.running)
+                    return { stopReason: reason ?? "completed", status: current };
+                if (current.pendingPermissionIds.length > 0)
+                    pending.push(...current.pendingPermissionIds);
+                if (current.pendingQuestionIds)
+                    pending.push(...current.pendingQuestionIds);
+                await delay(50);
+            }
+            if (pending.length > 0)
+                throw new RunStalledError(pending);
+            return { stopReason: reason ?? "unknown", status: await this.status() };
+        }
+        finally {
+            unsubscribe?.();
+        }
+    }
+    async run(prompt, options = {}) {
+        if (this.runLock)
+            throw new SessionBusyError({ status: 409, route: sessionPath(this.id, "/prompt") });
+        this.runLock = true;
+        const notices = [];
+        const unsubscribe = this.engine?.onEvent((event) => { if (event.type === "notice" && "notice" in event)
+            notices.push(event.notice); });
+        try {
+            await this.prompt(prompt, options);
+            const settled = await this.settled(options);
+            const stopReason = settled.stopReason === "idle" ? "completed" : settled.stopReason;
+            if (stopReason === "errored")
+                throw new DoMoError("DoMoCode run errored.");
+            return { stopReason, messages: await this.messages(), ...(settled.status.accounting === undefined ? {} : { accounting: settled.status.accounting }), notices };
+        }
+        finally {
+            unsubscribe?.();
+            this.runLock = false;
+        }
+    }
+    async attachAuthority() { return this.attach({ authority: "require" }); }
+    async requestAuthority() { return this.attach({ authority: "require" }); }
+    async releaseAuthority() {
+        const path = sessionPath(this.id, "/client/authority/release");
+        const value = await this.client.transport.json(path, { method: "POST", body: { clientID: this.client.clientId, owner: this.client.owner } });
+        const attachment = decodeAttachment(value, this.id);
+        this.attachment = attachment;
+        return attachment;
+    }
+    async transferAuthority(toClientId) {
+        const value = await this.client.transport.json(sessionPath(this.id, "/client/authority/transfer"), { method: "POST", body: { fromClientID: this.client.clientId, toClientID: toClientId, owner: this.client.owner } });
+        return decodeAttachment(value, this.id);
+    }
+    async authority() {
+        const value = await this.client.transport.json(sessionPath(this.id, "/client/authority"));
+        return value === null ? undefined : decodeAttachment(value, this.id);
+    }
+    async clients(includeInactive = false) {
+        const value = await this.client.transport.json(sessionPath(this.id, `/clients?includeInactive=${includeInactive}`));
+        return requiredArray(value, "clients").map((item) => decodeAttachment(item, this.id));
+    }
+    async clientEvents(after = 0) { const value = await this.client.transport.json(sessionPath(this.id, `/client/events?after=${after}`)); return requiredArray(value, "client events"); }
+    async clientJournal(clientId) { const query = clientId ? `?clientID=${encodeURIComponent(clientId)}` : ""; const value = await this.client.transport.json(sessionPath(this.id, `/client/export${query}`)); return requiredArray(value, "client journal"); }
+    async advanceCursor(sequence = this.engine?.lastSequence ?? this.cursor) {
+        const value = await this.client.transport.json(sessionPath(this.id, "/client/cursor"), { method: "POST", body: { clientID: this.client.clientId, owner: this.client.owner, sequence } });
+        this.cursor = Math.max(this.cursor, sequence);
+        const attachment = decodeAttachment(value, this.id);
+        this.attachment = attachment;
+        return attachment;
+    }
+    async diff(base) { const query = base ? `?base=${encodeURIComponent(base)}` : ""; return this.client.transport.json(sessionPath(this.id, `/diff${query}`)); }
+    async workspaceStatus() { return this.client.transport.json(sessionPath(this.id, "/workspace-status")); }
+    async undo() { return this.client.transport.json(sessionPath(this.id, "/undo"), { method: "POST" }); }
+    async redo() { return this.client.transport.json(sessionPath(this.id, "/redo"), { method: "POST" }); }
+    async children(parent) { const query = parent ? `?parent=${encodeURIComponent(parent)}` : ""; return this.client.transport.json(sessionPath(this.id, `/children${query}`)); }
+    async tree() { return this.client.transport.json(sessionPath(this.id, "/tree")); }
+    async timeline() { return this.client.transport.json(sessionPath(this.id, "/timeline")); }
+    async compact() { const value = await this.client.transport.json(sessionPath(this.id, "/compact"), { method: "POST" }); return isRecord(value) && typeof value.compacted === "boolean" ? value.compacted : true; }
+    async dispose() {
+        if (this.disposed)
+            return;
+        this.disposed = true;
+        try {
+            if (this.engine)
+                await this.engine.stop();
+        }
+        catch { /* disposal is best effort */ }
+        try {
+            if (this.engine && this.engine.lastSequence > this.cursor && this.attachment)
+                await this.advanceCursor(this.engine.lastSequence);
+        }
+        catch { /* best effort */ }
+        try {
+            if (this.attachment?.role === "authority")
+                await this.releaseAuthority();
+        }
+        catch { /* best effort */ }
+        try {
+            if (this.attachment)
+                await this.client.transport.json(sessionPath(this.id, "/client/detach"), { method: "POST", body: { clientID: this.client.clientId, owner: this.client.owner } });
+        }
+        catch { /* best effort */ }
+        this.leaseRelease?.();
+        this.leaseRelease = undefined;
+        this.forget();
+    }
+    async [Symbol.asyncDispose]() { await this.dispose(); }
+    async postPrompt(route, text, options) {
+        this.assertUsable();
+        const body = options.images && options.images.length > 0 ? { prompt: text, images: options.images } : { prompt: text };
+        await this.client.transport.json(sessionPath(this.id, `/${route}`), { method: "POST", body, expectedStatus: 202 });
+    }
+    async reconcile(signal) {
+        const events = [];
+        for (const route of ["/permissions", "/questions"]) {
+            try {
+                events.push(...requiredArray(await this.client.transport.json(sessionPath(this.id, route), { signal }), route));
+            }
+            catch (error) {
+                if (!(error instanceof NotFoundError))
+                    throw error;
+            }
+        }
+        return events;
+    }
+    assertUsable() { if (this.disposed)
+        throw new Error("Session handle has been disposed"); }
+}
+function decodeRef(value, fallback) { return isRecord(value) && typeof value.id === "string" && typeof value.path === "string" ? { id: value.id, path: value.path } : fallback; }
+export function decodeAttachment(value, fallbackSessionId) {
+    if (!isRecord(value))
+        throw new TypeError("Client attachment must be an object");
+    const clientId = requiredString(value.clientID ?? value.clientId, "clientID");
+    const sessionId = typeof (value.sessionID ?? value.sessionId) === "string" ? String(value.sessionID ?? value.sessionId) : fallbackSessionId;
+    const role = value.role === "authority" ? "authority" : "observer";
+    return { clientId, sessionId, owner: requiredString(value.owner, "owner"), role, active: value.active === undefined ? true : requiredBoolean(value.active, "active"), ...(value.attachedAt === undefined ? {} : { attachedAt: requiredString(value.attachedAt, "attachedAt") }), ...(value.updatedAt === undefined ? {} : { updatedAt: requiredString(value.updatedAt, "updatedAt") }), eventCursor: value.eventCursor === undefined ? 0 : requiredNumber(value.eventCursor, "eventCursor") };
+}
+export function decodeStatus(value, fallbackSessionId) {
+    if (!isRecord(value))
+        throw new TypeError("Session status must be an object");
+    const pendingPermissionIds = requiredArray(value.pendingPermissionIDs ?? value.pendingPermissionIds, "pending permissions").map((item) => requiredString(item, "permission id"));
+    const questions = value.pendingQuestionIDs ?? value.pendingQuestionIds;
+    return { sessionId: typeof (value.sessionID ?? value.sessionId) === "string" ? String(value.sessionID ?? value.sessionId) : fallbackSessionId, running: requiredBoolean(value.running, "running"), pendingPermissionIds, ...(questions === undefined || questions === null ? {} : { pendingQuestionIds: requiredArray(questions, "pending questions").map((item) => requiredString(item, "question id")) }), subscribers: requiredNumber(value.subscribers, "subscribers"), ...(value.runStartedAt === undefined || value.runStartedAt === null ? {} : { runStartedAt: requiredString(value.runStartedAt, "runStartedAt") }), ...(value.accounting === undefined || value.accounting === null ? {} : { accounting: decodeAccounting(value.accounting) }), ...(value.queuedMessageCount === undefined || value.queuedMessageCount === null ? {} : { queuedMessageCount: requiredNumber(value.queuedMessageCount, "queuedMessageCount") }), ...(value.steeringMode === undefined || value.steeringMode === null ? {} : { steeringMode: String(value.steeringMode) }), ...(value.mode === undefined || value.mode === null ? {} : { mode: String(value.mode) }), ...(value.agent === undefined || value.agent === null ? {} : { agent: String(value.agent) }) };
+}
+export function decodeAccounting(value) {
+    if (!isRecord(value))
+        throw new TypeError("Accounting must be an object");
+    const rawCost = value.costTotal;
+    const costTotal = typeof rawCost === "string" || typeof rawCost === "number" ? asDecimalString(String(rawCost)) : asDecimalString("0");
+    return { costTotal, contextTokens: requiredNumber(value.contextTokens ?? 0, "contextTokens"), turns: requiredNumber(value.turns ?? 0, "turns"), ...(value.contextWindow === undefined || value.contextWindow === null ? {} : { contextWindow: requiredNumber(value.contextWindow, "contextWindow") }), ...(isRecord(value.usage) ? { usage: { input: requiredNumber(value.usage.input ?? 0, "usage.input"), output: requiredNumber(value.usage.output ?? 0, "usage.output"), cacheRead: requiredNumber(value.usage.cacheRead ?? 0, "usage.cacheRead"), cacheWrite: requiredNumber(value.usage.cacheWrite ?? 0, "usage.cacheWrite") } } : {}) };
+}
+function sessionPath(id, suffix = "") { return `/session/${encodePathSegment(id)}${suffix}`; }
+function delay(milliseconds) { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
+//# sourceMappingURL=session.js.map

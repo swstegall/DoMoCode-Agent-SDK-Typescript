@@ -78,6 +78,7 @@ export class EventEngine {
     options;
     queue;
     reconciledInteractions = new Set();
+    listeners = new Set();
     stopped = new AbortController();
     started = false;
     runPromise;
@@ -93,6 +94,10 @@ export class EventEngine {
         this.queue = new AsyncQueue(this.options.queueSize, () => { this.stats.lagged += 1; options.onLagged?.(this.stats.lagged); });
     }
     get lastSequence() { return this.stats.lastSequence; }
+    onEvent(listener) {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
     start() {
         if (this.started)
             return;
@@ -168,14 +173,14 @@ export class EventEngine {
             if (event.type === "connected") {
                 if (!("protocolVersion" in event) || event.protocolVersion !== this.options.protocolVersion)
                     throw new ProtocolMismatchError("protocolVersion" in event && typeof event.protocolVersion === "number" ? event.protocolVersion : -1, this.options.protocolVersion);
-                this.queue.push(event);
+                this.publish(event);
                 if (this.options.reconcile) {
                     for (const pending of await this.options.reconcile(streamAbort.signal)) {
                         const event = decodeServerEvent(pending);
                         const key = interactionKey(event);
                         if (key)
                             this.reconciledInteractions.add(key);
-                        this.queue.push(event);
+                        this.publish(event);
                     }
                 }
                 continue;
@@ -193,9 +198,14 @@ export class EventEngine {
             }
             if ((event.type === "permission_resolved" || event.type === "question_resolved") && "id" in event)
                 this.reconciledInteractions.delete(`${event.type === "permission_resolved" ? "permission" : "question"}:${event.id}`);
-            this.queue.push(event);
+            this.publish(event);
         }
         await iterator.return?.(undefined);
+    }
+    publish(event) {
+        this.queue.push(event);
+        for (const listener of this.listeners)
+            listener(event);
     }
 }
 function interactionKey(event) {

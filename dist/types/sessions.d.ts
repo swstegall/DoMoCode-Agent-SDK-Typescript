@@ -14,13 +14,22 @@ export interface SessionSummary {
     parentSession?: string;
 }
 export interface SessionAccounting {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
+    usage?: {
+        input: number;
+        output: number;
+        cacheRead: number;
+        cacheWrite: number;
+        reasoning?: number;
+        cost?: Record<string, string>;
+    };
     costTotal: DecimalString;
-    contextTokens?: number;
+    contextTokens: number;
     contextWindow?: number;
+    turns: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
 }
 export interface SessionStatus {
     sessionId: string;
@@ -76,10 +85,13 @@ export interface SessionTitleResult {
 export type ClientRole = "authority" | "observer" | OpenEnum<"detached">;
 export interface SessionClientAttachment {
     clientId: string;
+    sessionId?: string;
     owner: string;
     role: ClientRole;
     active: boolean;
-    eventCursor?: number;
+    attachedAt?: string;
+    updatedAt?: string;
+    eventCursor: number;
     lastSeenAt?: string;
 }
 export interface SessionClientEvent {

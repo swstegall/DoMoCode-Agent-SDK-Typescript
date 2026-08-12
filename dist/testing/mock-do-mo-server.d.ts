@@ -66,6 +66,7 @@ export declare class MockDoMoServer {
     private detach;
     private tools;
     private status;
+    private isAuthority;
     private requireSession;
 }
 //# sourceMappingURL=mock-do-mo-server.d.ts.map

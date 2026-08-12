@@ -146,25 +146,29 @@ export class MockDoMoServer {
             if (method === "GET" && tail[0] === "tools")
                 return jsonResponse(this.tools(session));
             if (method === "POST" && tail[0] === "prompt")
-                return this.prompt(session, bodyObject(init));
+                return this.isAuthority(session, init) ? this.prompt(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "steer")
-                return this.steer(session, bodyObject(init));
+                return this.isAuthority(session, init) ? this.steer(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "abort") {
+                if (!this.isAuthority(session, init))
+                    return errorResponse(403, "authority required");
                 const aborted = session.running;
                 session.running = false;
                 return jsonResponse({ aborted });
             }
             if (method === "POST" && tail[0] === "force-clear") {
+                if (!this.isAuthority(session, init))
+                    return errorResponse(403, "authority required");
                 const cleared = session.running;
                 session.running = false;
                 return jsonResponse({ cleared });
             }
             if (method === "POST" && tail[0] === "permission")
-                return this.answerPermission(session, bodyObject(init));
+                return this.isAuthority(session, init) ? this.answerPermission(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "question")
-                return this.answerQuestion(session, bodyObject(init));
+                return this.isAuthority(session, init) ? this.answerQuestion(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "tool")
-                return this.executeTool(session, bodyObject(init));
+                return this.isAuthority(session, init) ? this.executeTool(session, bodyObject(init)) : errorResponse(403, "authority required");
             if (method === "POST" && tail[0] === "client" && tail[1] === "attach")
                 return this.attach(session, bodyObject(init));
             if (method === "POST" && tail[0] === "client" && tail[1] === "detach")
@@ -176,11 +180,15 @@ export class MockDoMoServer {
             if (method === "GET" && tail[0] === "client" && tail[1] === "authority")
                 return jsonResponse([...session.clients.values()].find((client) => client.role === "authority") ?? null);
             if (method === "POST" && tail[0] === "model") {
+                if (!this.isAuthority(session, init))
+                    return errorResponse(403, "authority required");
                 session.model = String(bodyObject(init).modelId ?? session.model);
                 this.emit(session.ref.id, { type: "notice", notice: { level: "info", code: "model", text: session.model } });
                 return jsonResponse({});
             }
             if (method === "POST" && tail[0] === "mode") {
+                if (!this.isAuthority(session, init))
+                    return errorResponse(403, "authority required");
                 session.mode = String(bodyObject(init).mode ?? session.mode);
                 this.emit(session.ref.id, { type: "notice", notice: { level: "info", code: "mode", text: session.mode } });
                 return jsonResponse({});
@@ -315,7 +323,7 @@ export class MockDoMoServer {
         const owner = typeof body.owner === "string" ? body.owner : clientId;
         const currentAuthority = [...session.clients.values()].find((client) => client.role === "authority" && client.active);
         const role = currentAuthority && currentAuthority.clientId !== clientId ? "observer" : "authority";
-        const attachment = { clientId, owner, role, active: true, eventCursor: 0 };
+        const attachment = { clientId, sessionId: session.ref.id, owner, role, active: true, eventCursor: 0 };
         session.clients.set(clientId, attachment);
         return jsonResponse(attachment);
     }
@@ -331,6 +339,10 @@ export class MockDoMoServer {
     }
     status(session) {
         return { sessionId: session.ref.id, running: session.running, pendingPermissionIds: [...session.permissions.keys()], pendingQuestionIds: [...session.questions.keys()], subscribers: session.streams.size, queuedMessageCount: session.queued, mode: session.mode, agent: "default" };
+    }
+    isAuthority(session, init) {
+        const clientId = readHeader(init?.headers, "x-domocode-client-id");
+        return clientId !== null && session.clients.get(clientId)?.role === "authority" && session.clients.get(clientId)?.active === true;
     }
     requireSession(id) {
         const session = this.sessionsById.get(id);

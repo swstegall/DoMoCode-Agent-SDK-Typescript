@@ -14,6 +14,7 @@ export class EventStreamWatchdogError extends EventStreamError {
 }
 
 export interface EventEngineStats { reconnects: number; lastSequence: number; lagged: number; connected: number; heartbeats: number }
+export type EventListener = (event: ServerEvent) => void;
 export interface EventEngineOptions {
   open: (after: number, signal: AbortSignal) => Promise<Response>;
   reconcile?: (signal: AbortSignal) => Promise<unknown[]>;
@@ -74,6 +75,7 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
   private readonly options: EventEngineOptions & Required<Pick<EventEngineOptions, "protocolVersion" | "heartbeatTimeoutMs" | "initialBackoffMs" | "maximumBackoffMs" | "queueSize">>;
   private readonly queue: AsyncQueue<ServerEvent>;
   private readonly reconciledInteractions = new Set<string>();
+  private readonly listeners = new Set<EventListener>();
   private readonly stopped = new AbortController();
   private started = false;
   private runPromise: Promise<void> | undefined;
@@ -91,6 +93,11 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
   }
 
   get lastSequence(): number { return this.stats.lastSequence; }
+
+  onEvent(listener: EventListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
 
   start(): void {
     if (this.started) return;
@@ -155,13 +162,13 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
       if (event.type === "heartbeat") { this.stats.heartbeats += 1; continue; }
       if (event.type === "connected") {
         if (!("protocolVersion" in event) || event.protocolVersion !== this.options.protocolVersion) throw new ProtocolMismatchError("protocolVersion" in event && typeof event.protocolVersion === "number" ? event.protocolVersion : -1, this.options.protocolVersion);
-        this.queue.push(event);
+        this.publish(event);
         if (this.options.reconcile) {
           for (const pending of await this.options.reconcile(streamAbort.signal)) {
             const event = decodeServerEvent(pending);
             const key = interactionKey(event);
             if (key) this.reconciledInteractions.add(key);
-            this.queue.push(event);
+            this.publish(event);
           }
         }
         continue;
@@ -177,9 +184,14 @@ export class EventEngine implements AsyncIterableIterator<ServerEvent> {
         continue;
       }
       if ((event.type === "permission_resolved" || event.type === "question_resolved") && "id" in event) this.reconciledInteractions.delete(`${event.type === "permission_resolved" ? "permission" : "question"}:${event.id}`);
-      this.queue.push(event);
+      this.publish(event);
     }
     await iterator.return?.(undefined);
+  }
+
+  private publish(event: ServerEvent): void {
+    this.queue.push(event);
+    for (const listener of this.listeners) listener(event);
   }
 }
 

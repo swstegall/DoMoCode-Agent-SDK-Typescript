@@ -18,6 +18,7 @@ export interface EventEngineStats {
     connected: number;
     heartbeats: number;
 }
+export type EventListener = (event: ServerEvent) => void;
 export interface EventEngineOptions {
     open: (after: number, signal: AbortSignal) => Promise<Response>;
     reconcile?: (signal: AbortSignal) => Promise<unknown[]>;
@@ -35,11 +36,13 @@ export declare class EventEngine implements AsyncIterableIterator<ServerEvent> {
     private readonly options;
     private readonly queue;
     private readonly reconciledInteractions;
+    private readonly listeners;
     private readonly stopped;
     private started;
     private runPromise;
     constructor(options: EventEngineOptions);
     get lastSequence(): number;
+    onEvent(listener: EventListener): () => void;
     start(): void;
     stop(): Promise<void>;
     next(): Promise<IteratorResult<ServerEvent>>;
@@ -47,5 +50,6 @@ export declare class EventEngine implements AsyncIterableIterator<ServerEvent> {
     [Symbol.asyncIterator](): AsyncIterableIterator<ServerEvent>;
     private run;
     private consume;
+    private publish;
 }
 //# sourceMappingURL=eventEngine.d.ts.map

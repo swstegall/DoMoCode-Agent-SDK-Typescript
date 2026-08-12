@@ -4,7 +4,17 @@ import { parseDecimal, type DecimalString, type ExactDecimal } from "./decimal.t
 
 export interface SessionRef { id: string; path: string }
 export interface SessionSummary { id: string; path: string; cwd: string; timestamp: string; name?: string; parentSession?: string }
-export interface SessionAccounting { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costTotal: DecimalString; contextTokens?: number; contextWindow?: number }
+export interface SessionAccounting {
+  usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; reasoning?: number; cost?: Record<string, string> };
+  costTotal: DecimalString;
+  contextTokens: number;
+  contextWindow?: number;
+  turns: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
 export interface SessionStatus { sessionId: string; running: boolean; pendingPermissionIds: string[]; pendingQuestionIds?: string[]; subscribers: number; runStartedAt?: string; accounting?: SessionAccounting; queuedMessageCount?: number; steeringMode?: OpenEnum<"all" | "one-at-a-time">; mode?: string; agent?: string }
 export interface ContextSnapshot { messages: Message[]; accounting?: SessionAccounting }
 export interface DirectToolResult { toolName: string; output: string; isError: boolean; imageCount: number }
@@ -17,7 +27,7 @@ export interface ForceClearResult { cleared: boolean }
 export interface SessionTitleResult { title?: string }
 
 export type ClientRole = "authority" | "observer" | OpenEnum<"detached">;
-export interface SessionClientAttachment { clientId: string; owner: string; role: ClientRole; active: boolean; eventCursor?: number; lastSeenAt?: string }
+export interface SessionClientAttachment { clientId: string; sessionId?: string; owner: string; role: ClientRole; active: boolean; attachedAt?: string; updatedAt?: string; eventCursor: number; lastSeenAt?: string }
 export interface SessionClientEvent { sequence: number; kind: string; sessionId: string; clientId: string; owner: string; timestamp: string; [key: string]: unknown }
 export interface SessionClientJournalEntry { event: SessionClientEvent; attachment: SessionClientAttachment }
 
