@@ -22,6 +22,7 @@ export interface SendOptions extends PromptOptions { preferSteer?: boolean }
 export interface SettleOptions { maxIdleMs?: number }
 export interface SettleResult { stopReason: string; status: SessionStatus }
 export interface TaskOptions { taskId?: string; agent?: string; background?: boolean; model?: string }
+export type PromptCommandArguments = Record<string, string>;
 export type McpResourceAction = "list" | "templates" | "read" | "health";
 export interface McpResourceOptions { server?: string; uri?: string }
 
@@ -128,6 +129,13 @@ export class SessionHandle {
 
   async prompt(text: string, options: PromptOptions = {}): Promise<void> { await this.postPrompt("prompt", text, options); }
   async steer(text: string, options: PromptOptions = {}): Promise<void> { await this.postPrompt("steer", text, options); }
+
+  /** Invoke a server-owned prompt command through the normal prompt channel. */
+  async invokePromptCommand(name: string, argumentsValue: PromptCommandArguments = {}): Promise<void> {
+    const normalized = name.replace(/^\//, "");
+    if (!/^[A-Za-z0-9_.:-]+$/.test(normalized)) throw new TypeError("Prompt command name contains unsupported characters");
+    await this.prompt(`/${normalized} ${JSON.stringify(argumentsValue)}`);
+  }
 
   async send(text: string, options: SendOptions = {}): Promise<void> {
     const running = (await this.status()).running;

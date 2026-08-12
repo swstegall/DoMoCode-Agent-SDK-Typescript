@@ -28,6 +28,17 @@ form, avoiding a second client-side flag grammar. `executeToolCommand()` is the 
 command escape hatch. Both return `DirectToolResult`; image payloads are represented by
 `imageCount` until the server's additive image-result route is available.
 
+MCP prompts are projected into the same command catalog. Their descriptors have
+`source: "mcp"`; invoke one through the normal prompt lifecycle with string arguments:
+
+```ts
+const mcpCommands = (await client.catalogs.commands()).filter((command) => command.source === "mcp");
+await session.invokePromptCommand(mcpCommands[0].name, { topic: "Swift" });
+```
+
+The server fetches and renders the MCP prompt before handing it to the agent, so prompt
+permissions, events, transcripts, and settlement remain identical to an ordinary prompt.
+
 `session.transcript()` and the standalone `renderTranscript()` helpers produce deterministic
 Markdown or escaped HTML from the lossless `/messages` projection. Base64 image bytes are
 never embedded; image media types are emitted as placeholders. Tool calls/results and

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DoMoCodeClient } from "../src/client.ts";
+import { MockDoMoServer } from "../src/testing/mock-do-mo-server.ts";
 import { decodeServerEvent } from "../src/types/events.ts";
 
 function json(value: unknown): Response {
@@ -47,4 +48,16 @@ test("MCP admin decoders reject malformed status and resource payloads", async (
     fetch: async (input) => new Response(JSON.stringify(new URL(input instanceof Request ? input.url : input.toString()).pathname === "/mcp" ? { github: { status: "connected" } } : []), { status: 200 })
   });
   await assert.rejects(() => client.mcp.servers({ maxAgeMs: 0 }), /MCP transport/);
+});
+
+test("prompt commands use the ordinary session prompt channel", async () => {
+  let received: string | undefined;
+  const server = new MockDoMoServer({ promptHandler: ({ prompt }) => { received = prompt; } });
+  const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch });
+  const session = await client.sessions.create();
+  await session.invokePromptCommand("mcp_github_summarize", { topic: "Swift" });
+  await session.settled();
+  assert.equal(received, '/mcp_github_summarize {"topic":"Swift"}');
+  await client.close();
+  server.close();
 });

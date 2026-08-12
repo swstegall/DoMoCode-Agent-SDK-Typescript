@@ -35,6 +35,7 @@ export interface TaskOptions {
     background?: boolean;
     model?: string;
 }
+export type PromptCommandArguments = Record<string, string>;
 export type McpResourceAction = "list" | "templates" | "read" | "health";
 export interface McpResourceOptions {
     server?: string;
@@ -72,6 +73,8 @@ export declare class SessionHandle {
     subagents(options?: SubagentRegistryOptions): SubagentRegistry;
     prompt(text: string, options?: PromptOptions): Promise<void>;
     steer(text: string, options?: PromptOptions): Promise<void>;
+    /** Invoke a server-owned prompt command through the normal prompt channel. */
+    invokePromptCommand(name: string, argumentsValue?: PromptCommandArguments): Promise<void>;
     send(text: string, options?: SendOptions): Promise<void>;
     abort(): Promise<boolean>;
     forceClear(): Promise<boolean>;

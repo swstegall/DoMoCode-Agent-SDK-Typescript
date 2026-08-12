@@ -1,6 +1,6 @@
 import type { JSONValue, OpenEnum } from "./common.ts";
 export type CatalogSource = OpenEnum<"builtIn" | "mcp" | "adapter" | "extensionProvider">;
-export type PromptResourceSource = OpenEnum<"builtin" | "user" | "project">;
+export type PromptResourceSource = OpenEnum<"builtin" | "user" | "project" | "mcp">;
 export type CommandKind = OpenEnum<"local" | "prompt">;
 export type ToolPermissionState = OpenEnum<"allowed" | "requiresApproval" | "denied" | "unavailable">;
 export interface ToolCatalogFilter {

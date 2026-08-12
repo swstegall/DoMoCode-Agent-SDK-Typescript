@@ -111,6 +111,13 @@ export class SessionHandle {
     }
     async prompt(text, options = {}) { await this.postPrompt("prompt", text, options); }
     async steer(text, options = {}) { await this.postPrompt("steer", text, options); }
+    /** Invoke a server-owned prompt command through the normal prompt channel. */
+    async invokePromptCommand(name, argumentsValue = {}) {
+        const normalized = name.replace(/^\//, "");
+        if (!/^[A-Za-z0-9_.:-]+$/.test(normalized))
+            throw new TypeError("Prompt command name contains unsupported characters");
+        await this.prompt(`/${normalized} ${JSON.stringify(argumentsValue)}`);
+    }
     async send(text, options = {}) {
         const running = (await this.status()).running;
         const preferSteer = options.preferSteer ?? running;
