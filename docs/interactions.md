@@ -60,6 +60,31 @@ The low-level methods remain available for integrations that do not use the disp
 `session.answerPermission(requestId, "once" | "always" | "reject", message?)` and
 `session.answerQuestion(requestId, answers | null)`, where `null` cancels a question.
 
+## Client-defined tools
+
+Register a tool definition before attaching a handler:
+
+```ts
+const session = await client.sessions.create({
+  clientTools: [{
+    name: "database_query",
+    description: "Run a read-only database query.",
+    inputSchema: { type: "object", properties: { sql: { type: "string" } }, required: ["sql"] }
+  }]
+});
+
+const stop = session.onToolCall(async ({ name, arguments: input, signal }) => {
+  if (name !== "database_query") return { output: "Unsupported tool", isError: true };
+  return { output: await queryDatabase(input, signal) };
+});
+```
+
+`onToolCall()` receives the server-assigned request id, JSON arguments, and an abort signal. It
+posts text, an error flag, and optional images to the server. A local timeout can be supplied as
+`onToolCall(handler, { timeoutMs })`; the server independently enforces its configured timeout.
+When the server emits `client_tool_resolved`, the signal aborts. A late result is accepted as a
+safe no-op rather than reviving a drained model continuation.
+
 ## Authority and lifecycle
 
 Only the current session authority may answer. Attach with `authority: "require"` for
