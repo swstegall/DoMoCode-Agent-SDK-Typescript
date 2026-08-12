@@ -30,6 +30,7 @@ export class MockDoMoServer {
     protocolVersion;
     version;
     capabilities;
+    corsOrigins;
     fetch;
     autoComplete;
     promptHandler;
@@ -48,7 +49,11 @@ export class MockDoMoServer {
         this.token = options.token ?? "mock-token";
         this.protocolVersion = options.protocolVersion ?? 1;
         this.version = options.version ?? "mock";
-        this.capabilities = options.capabilities ?? ["session-events", "questions", "permissions", "client-ledger"];
+        this.corsOrigins = [...new Set(options.corsOrigins ?? [])];
+        this.capabilities = [...new Set([
+                ...(options.capabilities ?? ["session-events", "questions", "permissions", "client-ledger"]),
+                ...(this.corsOrigins.length === 0 ? [] : ["cors"])
+            ])];
         this.autoComplete = options.autoComplete ?? true;
         this.promptHandler = options.promptHandler;
         this.toolCatalog = options.toolCatalog ?? [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
@@ -128,6 +133,33 @@ export class MockDoMoServer {
         }
     }
     async handleFetch(input, init) {
+        const origin = readHeader(init?.headers, "origin");
+        const method = init?.method?.toUpperCase() ?? "GET";
+        if (method === "OPTIONS") {
+            if (!origin || !this.corsOrigins.includes(origin))
+                return errorResponse(403, "Origin is not allowed");
+            return new Response(null, {
+                status: 204,
+                headers: {
+                    "access-control-allow-origin": origin,
+                    "access-control-allow-credentials": "true",
+                    "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                    "access-control-allow-headers": "Accept, Authorization, Content-Type, X-Domocode-Client-Id, X-Domocode-Client-Owner",
+                    "access-control-max-age": "600",
+                    vary: "Origin"
+                }
+            });
+        }
+        const response = await this.handleAuthorizedFetch(input, init);
+        if (!origin || !this.corsOrigins.includes(origin))
+            return response;
+        const headers = new Headers(response.headers);
+        headers.set("access-control-allow-origin", origin);
+        headers.set("access-control-allow-credentials", "true");
+        headers.append("vary", "Origin");
+        return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    }
+    async handleAuthorizedFetch(input, init) {
         if (this.closed)
             return errorResponse(503, "MockDoMoServer is closed");
         const url = new URL(input instanceof Request ? input.url : input.toString(), this.baseURL);

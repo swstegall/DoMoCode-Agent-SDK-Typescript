@@ -20,6 +20,7 @@ export interface MockDoMoServerOptions {
     token?: string;
     protocolVersion?: number;
     version?: string;
+    corsOrigins?: string[];
     autoComplete?: boolean;
     promptHandler?: (context: MockPromptContext) => Promise<MockPromptResult | void> | MockPromptResult | void;
     capabilities?: string[];
@@ -45,6 +46,7 @@ export declare class MockDoMoServer {
     readonly protocolVersion: number;
     readonly version: string;
     readonly capabilities: string[];
+    readonly corsOrigins: readonly string[];
     readonly fetch: FetchFunction;
     private readonly autoComplete;
     private readonly promptHandler;
@@ -73,6 +75,7 @@ export declare class MockDoMoServer {
     }>, "type">): Promise<void>;
     close(): void;
     private handleFetch;
+    private handleAuthorizedFetch;
     private handleGlobal;
     private openEvents;
     private enqueue;

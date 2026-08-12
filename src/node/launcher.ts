@@ -26,6 +26,7 @@ export interface LaunchServerOptions {
   maxCostPerRun?: string | number;
   steeringMode?: "all" | "one-at-a-time";
   sandbox?: boolean;
+  corsOrigins?: string[];
   signal?: AbortSignal;
   baseURL?: string;
   baseUrl?: string;
@@ -163,6 +164,7 @@ export async function launchServer(options: LaunchServerOptions = {}): Promise<L
     appendOption(args, "--max-turns", options.maxTurns);
     appendOption(args, "--max-cost-per-run", options.maxCostPerRun);
     appendOption(args, "--steering-mode", options.steeringMode);
+    for (const origin of options.corsOrigins ?? []) args.push("--cors", origin);
     const baseURL = options.baseURL ?? options.baseUrl;
     if (baseURL) args.push("--base-url", baseURL);
   }

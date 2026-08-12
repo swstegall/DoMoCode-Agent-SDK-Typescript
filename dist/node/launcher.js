@@ -124,6 +124,8 @@ export async function launchServer(options = {}) {
         appendOption(args, "--max-turns", options.maxTurns);
         appendOption(args, "--max-cost-per-run", options.maxCostPerRun);
         appendOption(args, "--steering-mode", options.steeringMode);
+        for (const origin of options.corsOrigins ?? [])
+            args.push("--cors", origin);
         const baseURL = options.baseURL ?? options.baseUrl;
         if (baseURL)
             args.push("--base-url", baseURL);

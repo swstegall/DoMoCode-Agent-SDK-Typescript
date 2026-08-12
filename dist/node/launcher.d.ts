@@ -28,6 +28,7 @@ export interface LaunchServerOptions {
     maxCostPerRun?: string | number;
     steeringMode?: "all" | "one-at-a-time";
     sandbox?: boolean;
+    corsOrigins?: string[];
     signal?: AbortSignal;
     baseURL?: string;
     baseUrl?: string;

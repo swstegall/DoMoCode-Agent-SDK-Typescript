@@ -1,0 +1,11 @@
+{
+  "name": "domocode-agent-sdk-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}

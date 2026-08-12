@@ -44,11 +44,13 @@ test("launcher forwards server flags and exposes a TUI command", async () => {
     maxCostPerRun: "0.25",
     steeringMode: "all",
     sandbox: true,
+    corsOrigins: ["http://localhost:3000", "https://dashboard.example"],
     baseUrl: "http://gateway.test/v1",
     onStderr: (line) => observed.push(line)
   });
   assert.ok(observed.some((line) => line.includes("--max-turns") && line.includes("3")));
   assert.ok(observed.some((line) => line.includes("--sandbox")));
+  assert.ok(observed.some((line) => line.includes("--cors") && line.includes("http://localhost:3000")));
   assert.deepEqual(server.tuiCommand("domo-test").args, ["--url", server.baseURL, "--token", "abc123"]);
   await server.close();
 });

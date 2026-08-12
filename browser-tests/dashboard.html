@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>DoMoCode SDK browser smoke</title>
+<main>
+  <h1>DoMoCode SDK browser smoke</h1>
+  <output id="result">idle</output>
+</main>
+<script type="module">
+  import { DoMoCodeClient } from "/sdk/index.js";
+
+  window.runDoMoSmoke = async (baseURL, token) => {
+    const client = new DoMoCodeClient({ baseURL, token });
+    const capabilities = await client.capabilities();
+    const session = await client.sessions.create();
+    const events = [];
+    const unsubscribe = session.onEvent((event) => events.push(event.type));
+    await session.prompt("browser smoke");
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (!(await session.status()).running) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const result = {
+      cors: capabilities?.capabilities.includes("cors") ?? false,
+      messageCount: (await session.messages()).length,
+      sawAgentEnd: events.includes("agent_end")
+    };
+    document.querySelector("#result").textContent = JSON.stringify(result);
+    unsubscribe();
+    await client.close();
+    return result;
+  };
+</script>

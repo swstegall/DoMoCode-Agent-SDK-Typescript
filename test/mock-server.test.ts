@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { decodeSequencedServerEvent } from "../src/types/events.ts";
 import { MockDoMoServer } from "../src/testing/mock-do-mo-server.ts";
+import { MockDoMoTcpServer } from "../src/testing/mock-do-mo-server-node.ts";
 
 test("mock server supports authenticated sessions and status", async () => {
   const server = new MockDoMoServer();
@@ -30,4 +31,27 @@ test("mock server retains sequenced events and reconciles pending permissions", 
   assert.match(new TextDecoder().decode(first.value), /connected/);
   await reader.cancel();
   server.close();
+});
+
+test("TCP mock server exposes opt-in CORS for browser-shaped requests", async () => {
+  const origin = "http://127.0.0.1:3000";
+  const mock = new MockDoMoServer({ corsOrigins: [origin] });
+  const tcp = await MockDoMoTcpServer.start({ server: mock });
+  try {
+    const preflight = await fetch(`${tcp.baseURL}/session`, {
+      method: "OPTIONS",
+      headers: { origin, "access-control-request-method": "POST", "access-control-request-headers": "authorization" }
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+
+    const capabilities = await fetch(`${tcp.baseURL}/capabilities`, {
+      headers: { origin, authorization: `Bearer ${mock.token}` }
+    });
+    assert.equal(capabilities.status, 200);
+    assert.equal(capabilities.headers.get("access-control-allow-origin"), origin);
+    assert.deepEqual((await capabilities.json()).capabilities.includes("cors"), true);
+  } finally {
+    await tcp.close();
+  }
 });
