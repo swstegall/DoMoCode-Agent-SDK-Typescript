@@ -4,6 +4,7 @@ export const SDK_VERSION = "0.1.0";
 export const PROTOCOL_VERSION = 1;
 export * from "./transport.js";
 export * from "./uuid.js";
+export * from "./cursorFeed.js";
 export * from "./sse.js";
 export * from "./eventEngine.js";
 export * from "./client.js";

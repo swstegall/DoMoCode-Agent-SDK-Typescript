@@ -4,6 +4,7 @@ export declare const SDK_VERSION: "0.1.0";
 export declare const PROTOCOL_VERSION: 1;
 export * from "./transport.ts";
 export * from "./uuid.ts";
+export * from "./cursorFeed.ts";
 export * from "./sse.ts";
 export * from "./eventEngine.ts";
 export * from "./client.ts";
