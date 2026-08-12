@@ -3,6 +3,7 @@ import type { ServerCapabilities, SessionRef, SessionSummary } from "./types/ses
 import { SessionHandle, type SessionAcquireOptions, type SessionAttachOptions } from "./session.ts";
 import { CatalogClient } from "./catalogs.ts";
 import { WorkflowClient } from "./workflows.ts";
+import { JobClient } from "./jobs.ts";
 export interface DoMoCodeClientOptions extends TransportOptions {
 }
 export declare class DoMoCodeClient {
@@ -10,6 +11,7 @@ export declare class DoMoCodeClient {
     readonly sessions: SessionRegistry;
     readonly catalogs: CatalogClient;
     readonly workflows: WorkflowClient;
+    readonly jobs: JobClient;
     constructor(options: DoMoCodeClientOptions);
     get baseURL(): string;
     get clientId(): string;

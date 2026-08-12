@@ -5,6 +5,7 @@ import { SessionHandle, type SessionAcquireOptions, type SessionAttachOptions } 
 import { isRecord, requiredString } from "./types/common.ts";
 import { CatalogClient } from "./catalogs.ts";
 import { WorkflowClient } from "./workflows.ts";
+import { JobClient } from "./jobs.ts";
 
 export interface DoMoCodeClientOptions extends TransportOptions {}
 
@@ -13,12 +14,14 @@ export class DoMoCodeClient {
   readonly sessions: SessionRegistry;
   readonly catalogs: CatalogClient;
   readonly workflows: WorkflowClient;
+  readonly jobs: JobClient;
 
   constructor(options: DoMoCodeClientOptions) {
     this.transport = new Transport(options);
     this.sessions = new SessionRegistry(this);
     this.catalogs = new CatalogClient(this.transport);
     this.workflows = new WorkflowClient(this.transport);
+    this.jobs = new JobClient(this.transport);
   }
 
   get baseURL(): string { return this.transport.baseURL; }

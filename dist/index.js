@@ -10,6 +10,7 @@ export * from "./eventEngine.js";
 export * from "./client.js";
 export * from "./catalogs.js";
 export * from "./workflows.js";
+export * from "./jobs.js";
 export * from "./session.js";
 export * from "./interactionRuntime.js";
 export * from "./transcript.js";
