@@ -6,7 +6,7 @@ export type ServerEventName = GeneratedServerEventName;
 export type AgentEndReason = OpenEnum<"completed" | "errored" | "aborted" | "max_turns_reached" | "stopped_by_hook" | "terminated_by_tool" | "no_progress" | "cost_limit_reached">;
 export type NoticeLevel = OpenEnum<"info" | "warning" | "error">;
 export type QueueMode = OpenEnum<"all" | "one-at-a-time">;
-export type SubagentStatus = OpenEnum<"started" | "accepted" | "running" | "completed" | "failed">;
+export type SubagentStatus = OpenEnum<"started" | "accepted" | "running" | "completed" | "failed" | "cancelled">;
 export interface ConnectedEvent {
     type: "connected";
     protocolVersion: number;
@@ -97,8 +97,14 @@ export interface SubagentTaskEvent {
     childSessionId: string;
     depth: number;
     status: SubagentStatus;
+    parentSessionId?: string;
+    description?: string;
     prompt?: string;
     agent?: string;
+    mode?: string;
+    model?: string;
+    toolAllowlist?: string[];
+    output?: string;
     error?: string;
 }
 export interface SubagentEvent {

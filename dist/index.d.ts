@@ -12,6 +12,7 @@ export * from "./session.ts";
 export * from "./interactionRuntime.ts";
 export * from "./transcript.ts";
 export * from "./query.ts";
+export * from "./subagents.ts";
 export * from "./types/asks.ts";
 export * from "./types/catalogs.ts";
 export * from "./types/common.ts";

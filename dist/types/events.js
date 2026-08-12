@@ -62,7 +62,21 @@ export function decodeServerEvent(value) {
         }
         case "subagent": {
             const subagent = jsonObject(value.subagent, "subagent");
-            return { type, subagent: { taskId: requiredString(subagent.taskId, "taskId"), childSessionId: requiredString(subagent.childSessionId, "childSessionId"), depth: requiredNumber(subagent.depth, "depth"), status: requiredString(subagent.status, "status"), ...(subagent.prompt === undefined ? {} : { prompt: requiredString(subagent.prompt, "prompt") }), ...(subagent.agent === undefined ? {} : { agent: requiredString(subagent.agent, "agent") }), ...(subagent.error === undefined ? {} : { error: requiredString(subagent.error, "error") }) } };
+            return { type, subagent: {
+                    taskId: requiredString(subagent.taskId, "taskId"),
+                    childSessionId: requiredString(subagent.childSessionId, "childSessionId"),
+                    depth: requiredNumber(subagent.depth, "depth"),
+                    status: requiredString(subagent.status, "status"),
+                    ...(subagent.parentSessionId === undefined ? {} : { parentSessionId: requiredString(subagent.parentSessionId, "parentSessionId") }),
+                    ...(subagent.description === undefined ? {} : { description: requiredString(subagent.description, "description") }),
+                    ...(subagent.prompt === undefined ? {} : { prompt: requiredString(subagent.prompt, "prompt") }),
+                    ...(subagent.agent === undefined ? {} : { agent: requiredString(subagent.agent, "agent") }),
+                    ...(subagent.mode === undefined ? {} : { mode: requiredString(subagent.mode, "mode") }),
+                    ...(subagent.model === undefined ? {} : { model: requiredString(subagent.model, "model") }),
+                    ...(subagent.toolAllowlist === undefined ? {} : { toolAllowlist: requiredArray(subagent.toolAllowlist, "toolAllowlist").map((item) => requiredString(item, "tool allowlist entry")) }),
+                    ...(subagent.output === undefined ? {} : { output: requiredString(subagent.output, "output") }),
+                    ...(subagent.error === undefined ? {} : { error: requiredString(subagent.error, "error") })
+                } };
         }
         default: return { type, raw: value };
     }

@@ -348,8 +348,9 @@ export class MockDoMoServer {
   private attach(session: MockSession, body: Record<string, unknown>): Response {
     const clientId = typeof body.clientID === "string" ? body.clientID : uuidv7();
     const owner = typeof body.owner === "string" ? body.owner : clientId;
+    const requestAuthority = body.requestAuthority !== false;
     const currentAuthority = [...session.clients.values()].find((client) => client.role === "authority" && client.active);
-    const role = currentAuthority && currentAuthority.clientId !== clientId ? "observer" : "authority";
+    const role = !requestAuthority || (currentAuthority && currentAuthority.clientId !== clientId) ? "observer" : "authority";
     const attachment: SessionClientAttachment = { clientId, sessionId: session.ref.id, owner, role, active: true, eventCursor: 0 };
     session.clients.set(clientId, attachment);
     return jsonResponse(attachment);

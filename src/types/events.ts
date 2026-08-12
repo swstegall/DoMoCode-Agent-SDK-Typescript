@@ -9,7 +9,7 @@ export type ServerEventName = GeneratedServerEventName;
 export type AgentEndReason = OpenEnum<"completed" | "errored" | "aborted" | "max_turns_reached" | "stopped_by_hook" | "terminated_by_tool" | "no_progress" | "cost_limit_reached">;
 export type NoticeLevel = OpenEnum<"info" | "warning" | "error">;
 export type QueueMode = OpenEnum<"all" | "one-at-a-time">;
-export type SubagentStatus = OpenEnum<"started" | "accepted" | "running" | "completed" | "failed">;
+export type SubagentStatus = OpenEnum<"started" | "accepted" | "running" | "completed" | "failed" | "cancelled">;
 
 export interface ConnectedEvent { type: "connected"; protocolVersion: number; sessionId: string; running?: boolean }
 export interface HeartbeatEvent { type: "heartbeat" }
@@ -29,7 +29,21 @@ export interface QuestionResolvedEvent { type: "question_resolved"; id: string }
 export interface QueueUpdateEvent { type: "queue_update"; count: number; mode: QueueMode }
 export interface ServerNotice { level: NoticeLevel; code: string; text: string; detail?: string; kind?: string; ttlMilliseconds?: number; recovery?: Record<string, unknown> }
 export interface NoticeEvent { type: "notice"; notice: ServerNotice }
-export interface SubagentTaskEvent { taskId: string; childSessionId: string; depth: number; status: SubagentStatus; prompt?: string; agent?: string; error?: string }
+export interface SubagentTaskEvent {
+  taskId: string;
+  childSessionId: string;
+  depth: number;
+  status: SubagentStatus;
+  parentSessionId?: string;
+  description?: string;
+  prompt?: string;
+  agent?: string;
+  mode?: string;
+  model?: string;
+  toolAllowlist?: string[];
+  output?: string;
+  error?: string;
+}
 export interface SubagentEvent { type: "subagent"; subagent: SubagentTaskEvent }
 export interface UnknownEvent { type: string; raw: unknown; sequence?: number }
 
@@ -98,7 +112,21 @@ export function decodeServerEvent(value: unknown): ServerEvent {
     }
     case "subagent": {
       const subagent = jsonObject(value.subagent, "subagent");
-      return { type, subagent: { taskId: requiredString(subagent.taskId, "taskId"), childSessionId: requiredString(subagent.childSessionId, "childSessionId"), depth: requiredNumber(subagent.depth, "depth"), status: requiredString(subagent.status, "status") as SubagentStatus, ...(subagent.prompt === undefined ? {} : { prompt: requiredString(subagent.prompt, "prompt") }), ...(subagent.agent === undefined ? {} : { agent: requiredString(subagent.agent, "agent") }), ...(subagent.error === undefined ? {} : { error: requiredString(subagent.error, "error") }) } };
+      return { type, subagent: {
+        taskId: requiredString(subagent.taskId, "taskId"),
+        childSessionId: requiredString(subagent.childSessionId, "childSessionId"),
+        depth: requiredNumber(subagent.depth, "depth"),
+        status: requiredString(subagent.status, "status") as SubagentStatus,
+        ...(subagent.parentSessionId === undefined ? {} : { parentSessionId: requiredString(subagent.parentSessionId, "parentSessionId") }),
+        ...(subagent.description === undefined ? {} : { description: requiredString(subagent.description, "description") }),
+        ...(subagent.prompt === undefined ? {} : { prompt: requiredString(subagent.prompt, "prompt") }),
+        ...(subagent.agent === undefined ? {} : { agent: requiredString(subagent.agent, "agent") }),
+        ...(subagent.mode === undefined ? {} : { mode: requiredString(subagent.mode, "mode") }),
+        ...(subagent.model === undefined ? {} : { model: requiredString(subagent.model, "model") }),
+        ...(subagent.toolAllowlist === undefined ? {} : { toolAllowlist: requiredArray(subagent.toolAllowlist, "toolAllowlist").map((item) => requiredString(item, "tool allowlist entry")) }),
+        ...(subagent.output === undefined ? {} : { output: requiredString(subagent.output, "output") }),
+        ...(subagent.error === undefined ? {} : { error: requiredString(subagent.error, "error") })
+      } };
     }
     default: return { type, raw: value };
   }

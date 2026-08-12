@@ -8,6 +8,7 @@ import { AttachRejectedError, AuthorityUnavailableError, ConflictError, DoMoErro
 import { InteractionRuntime } from "./interactionRuntime.js";
 import { decodeToolCatalog } from "./catalogs.js";
 import { renderTranscript } from "./transcript.js";
+import { SubagentRegistry } from "./subagents.js";
 export class SessionHandle {
     client;
     ref;
@@ -20,6 +21,7 @@ export class SessionHandle {
     leaseMode;
     cursor = 0;
     interactionRuntime;
+    subagentRegistry;
     constructor(client, ref, forget) { this.client = client; this.ref = ref; this.forget = forget; }
     get id() { return this.ref.id; }
     get path() { return this.ref.path; }
@@ -95,6 +97,13 @@ export class SessionHandle {
     }
     onInteraction(handler, options = {}) {
         return this.interactionRuntimeFor(options).onInteraction(handler);
+    }
+    /** Return the live subagent index; child streams are observed by default. */
+    subagents(options = {}) {
+        this.assertUsable();
+        if (!this.subagentRegistry)
+            this.subagentRegistry = new SubagentRegistry(this, options);
+        return this.subagentRegistry;
     }
     async prompt(text, options = {}) { await this.postPrompt("prompt", text, options); }
     async steer(text, options = {}) { await this.postPrompt("steer", text, options); }
@@ -183,6 +192,18 @@ export class SessionHandle {
     async executeToolCommand(command) {
         const value = await this.client.transport.json(sessionPath(this.id, "/tool"), { method: "POST", body: { command } });
         return decodeDirectToolResult(value);
+    }
+    async task(prompt, options = {}) {
+        return this.executeTool("task", {
+            prompt,
+            ...(options.taskId === undefined ? {} : { task_id: options.taskId }),
+            ...(options.agent === undefined ? {} : { agent: options.agent }),
+            ...(options.background === undefined ? {} : { background: options.background }),
+            ...(options.model === undefined ? {} : { model: options.model })
+        });
+    }
+    async resumeTask(taskId, prompt = "", options = {}) {
+        return this.task(prompt, { ...options, taskId });
     }
     async answerPermission(requestId, reply, message) {
         const body = { requestID: requestId, reply, ...(message === undefined ? {} : { message }) };
@@ -297,6 +318,7 @@ export class SessionHandle {
             return;
         this.disposed = true;
         this.interactionRuntime?.close();
+        await this.subagentRegistry?.close();
         try {
             if (this.engine)
                 await this.engine.stop();

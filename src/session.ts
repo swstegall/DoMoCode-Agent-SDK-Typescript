@@ -12,6 +12,7 @@ import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOpt
 import { decodeToolCatalog } from "./catalogs.ts";
 import type { ToolCatalogEntry } from "./types/catalogs.ts";
 import { renderTranscript, type TranscriptOptions } from "./transcript.ts";
+import { SubagentRegistry, type SubagentRegistryOptions } from "./subagents.ts";
 
 export type AuthorityPreference = "require" | "prefer" | "observer";
 export interface SessionAttachOptions { authority?: AuthorityPreference }
@@ -20,6 +21,7 @@ export interface PromptOptions { images?: ImageBlock[] }
 export interface SendOptions extends PromptOptions { preferSteer?: boolean }
 export interface SettleOptions { maxIdleMs?: number }
 export interface SettleResult { stopReason: string; status: SessionStatus }
+export interface TaskOptions { taskId?: string; agent?: string; background?: boolean; model?: string }
 
 export class SessionHandle {
   readonly client: DoMoCodeClient;
@@ -33,6 +35,7 @@ export class SessionHandle {
   private leaseMode: "exclusive" | "shared" | undefined;
   private cursor = 0;
   private interactionRuntime: InteractionRuntime | undefined;
+  private subagentRegistry: SubagentRegistry | undefined;
 
   constructor(client: DoMoCodeClient, ref: SessionRef, forget: () => void) { this.client = client; this.ref = ref; this.forget = forget; }
   get id(): string { return this.ref.id; }
@@ -109,6 +112,13 @@ export class SessionHandle {
 
   onInteraction(handler: InteractionHandler, options: InteractionRuntimeOptions = {}): () => void {
     return this.interactionRuntimeFor(options).onInteraction(handler);
+  }
+
+  /** Return the live subagent index; child streams are observed by default. */
+  subagents(options: SubagentRegistryOptions = {}): SubagentRegistry {
+    this.assertUsable();
+    if (!this.subagentRegistry) this.subagentRegistry = new SubagentRegistry(this, options);
+    return this.subagentRegistry;
   }
 
   async prompt(text: string, options: PromptOptions = {}): Promise<void> { await this.postPrompt("prompt", text, options); }
@@ -205,6 +215,20 @@ export class SessionHandle {
   async executeToolCommand(command: string): Promise<DirectToolResult> {
     const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/tool"), { method: "POST", body: { command } });
     return decodeDirectToolResult(value);
+  }
+
+  async task(prompt: string, options: TaskOptions = {}): Promise<DirectToolResult> {
+    return this.executeTool("task", {
+      prompt,
+      ...(options.taskId === undefined ? {} : { task_id: options.taskId }),
+      ...(options.agent === undefined ? {} : { agent: options.agent }),
+      ...(options.background === undefined ? {} : { background: options.background }),
+      ...(options.model === undefined ? {} : { model: options.model })
+    });
+  }
+
+  async resumeTask(taskId: string, prompt = "", options: Omit<TaskOptions, "taskId"> = {}): Promise<DirectToolResult> {
+    return this.task(prompt, { ...options, taskId });
   }
 
   async answerPermission(requestId: string, reply: "once" | "always" | "reject", message?: string): Promise<void> {
@@ -314,6 +338,7 @@ export class SessionHandle {
     if (this.disposed) return;
     this.disposed = true;
     this.interactionRuntime?.close();
+    await this.subagentRegistry?.close();
     try { if (this.engine) await this.engine.stop(); } catch { /* disposal is best effort */ }
     try { if (this.engine && this.engine.lastSequence > this.cursor && this.attachment) await this.advanceCursor(this.engine.lastSequence); } catch { /* best effort */ }
     try { if (this.attachment?.role === "authority") await this.releaseAuthority(); } catch { /* best effort */ }

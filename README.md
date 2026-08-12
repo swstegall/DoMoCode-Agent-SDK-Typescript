@@ -27,3 +27,5 @@ provide both capability-object asks (`ask.allow()`, `ask.answer()`) and low-leve
 Catalogs, direct tools, and transcript export are covered in [`docs/catalogs.md`](docs/catalogs.md).
 
 The high-level `query()`/`runQuery()` layer is documented in [`docs/query.md`](docs/query.md).
+
+Child-session monitoring and task resumption are documented in [`docs/subagents.md`](docs/subagents.md).

@@ -8,6 +8,7 @@ import type { DoMoCodeClient } from "./client.ts";
 import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
 import type { ToolCatalogEntry } from "./types/catalogs.ts";
 import { type TranscriptOptions } from "./transcript.ts";
+import { SubagentRegistry, type SubagentRegistryOptions } from "./subagents.ts";
 export type AuthorityPreference = "require" | "prefer" | "observer";
 export interface SessionAttachOptions {
     authority?: AuthorityPreference;
@@ -28,6 +29,12 @@ export interface SettleResult {
     stopReason: string;
     status: SessionStatus;
 }
+export interface TaskOptions {
+    taskId?: string;
+    agent?: string;
+    background?: boolean;
+    model?: string;
+}
 export declare class SessionHandle {
     readonly client: DoMoCodeClient;
     private ref;
@@ -40,6 +47,7 @@ export declare class SessionHandle {
     private leaseMode;
     private cursor;
     private interactionRuntime;
+    private subagentRegistry;
     constructor(client: DoMoCodeClient, ref: SessionRef, forget: () => void);
     get id(): string;
     get path(): string;
@@ -55,6 +63,8 @@ export declare class SessionHandle {
     interactionRuntimeFor(options?: InteractionRuntimeOptions): InteractionRuntime;
     interactions(options?: InteractionRuntimeOptions): AsyncIterableIterator<RuntimeInteraction>;
     onInteraction(handler: InteractionHandler, options?: InteractionRuntimeOptions): () => void;
+    /** Return the live subagent index; child streams are observed by default. */
+    subagents(options?: SubagentRegistryOptions): SubagentRegistry;
     prompt(text: string, options?: PromptOptions): Promise<void>;
     steer(text: string, options?: PromptOptions): Promise<void>;
     send(text: string, options?: SendOptions): Promise<void>;
@@ -77,6 +87,8 @@ export declare class SessionHandle {
     tools(): Promise<ToolCatalogEntry[]>;
     executeTool(name: string, argumentsValue?: Record<string, JSONValue>): Promise<DirectToolResult>;
     executeToolCommand(command: string): Promise<DirectToolResult>;
+    task(prompt: string, options?: TaskOptions): Promise<DirectToolResult>;
+    resumeTask(taskId: string, prompt?: string, options?: Omit<TaskOptions, "taskId">): Promise<DirectToolResult>;
     answerPermission(requestId: string, reply: "once" | "always" | "reject", message?: string): Promise<void>;
     answerQuestion(requestId: string, answers: QuestionAnswer[] | null): Promise<void>;
     pendingPermissions(): Promise<ServerEvent[]>;
