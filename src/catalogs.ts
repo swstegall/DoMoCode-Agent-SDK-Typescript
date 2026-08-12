@@ -1,6 +1,6 @@
 import type { Transport } from "./transport.ts";
 import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString } from "./types/common.ts";
-import type { AgentProfileSummary, CatalogSource, CommandDescriptor, CommandKind, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, PromptResourceSource, SkillDescriptor, ToolCatalogEntry, ToolCatalogFilter, ToolPermissionState } from "./types/catalogs.ts";
+import type { AgentProfileSummary, CatalogSnapshot, CatalogSource, CommandDescriptor, CommandKind, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, PromptResourceSource, SkillDescriptor, ToolCatalogEntry, ToolCatalogFilter, ToolPermissionState } from "./types/catalogs.ts";
 
 export interface ModelCatalogOptions { maxAgeMs?: number }
 export interface SkillCatalogOptions { includeBody?: boolean }
@@ -38,9 +38,9 @@ export class CatalogClient {
     return requiredArray(await this.transport.json<unknown>("/memory"), "memory").map(decodeProjectMemoryRecord);
   }
 
-  async snapshot(options: ModelCatalogOptions = {}): Promise<{ commands: CommandRegistry; agents: AgentProfileSummary[]; models: ModelOption[]; memory: ProjectMemoryRecord[] }> {
-    const [commands, agents, models, memory] = await Promise.all([this.commands(), this.agents(), this.models(options), this.memory()]);
-    return { commands, agents, models, memory };
+  async snapshot(options: ModelCatalogOptions = {}): Promise<{ commands: CommandRegistry; skills: SkillDescriptor[]; agents: AgentProfileSummary[]; models: ModelOption[]; memory: ProjectMemoryRecord[] }> {
+    const [commands, skills, agents, models, memory] = await Promise.all([this.commands(), this.skills(), this.agents(), this.models(options), this.memory()]);
+    return { commands, skills, agents, models, memory };
   }
 }
 

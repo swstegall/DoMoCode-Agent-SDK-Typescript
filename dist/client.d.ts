@@ -1,13 +1,18 @@
 import { Transport, type TransportOptions } from "./transport.ts";
 import type { ServerCapabilities, SessionRef, SessionSummary } from "./types/sessions.ts";
+import type { CatalogSnapshot } from "./types/catalogs.ts";
 import { SessionHandle, type SessionAcquireOptions, type SessionAttachOptions } from "./session.ts";
-import { CatalogClient } from "./catalogs.ts";
+import { CatalogClient, type ModelCatalogOptions } from "./catalogs.ts";
 import { WorkflowClient } from "./workflows.ts";
 import { JobClient } from "./jobs.ts";
 import { HandoffClient } from "./handoffs.ts";
 import { AutomationClient } from "./automations.ts";
 import { McpClient } from "./mcp.ts";
 export interface DoMoCodeClientOptions extends TransportOptions {
+}
+export interface CatalogOptions extends ModelCatalogOptions {
+    session?: SessionHandle;
+    includeSkillBody?: boolean;
 }
 export declare class DoMoCodeClient {
     readonly transport: Transport;
@@ -22,6 +27,11 @@ export declare class DoMoCodeClient {
     get baseURL(): string;
     get clientId(): string;
     get owner(): string;
+    /**
+     * Read the global command/skill/agent/model inventory in one call. Tools are
+     * session-scoped; pass an already-open handle to include that live view.
+     */
+    catalog(options?: CatalogOptions): Promise<CatalogSnapshot>;
     capabilities(): Promise<ServerCapabilities | undefined>;
     close(): Promise<void>;
 }

@@ -1,9 +1,10 @@
 import { Transport, type TransportOptions, encodePathSegment } from "./transport.ts";
 import { NotFoundError, SessionAlreadyAcquiredError } from "./types/errors.ts";
 import type { ServerCapabilities, SessionRef, SessionSummary } from "./types/sessions.ts";
+import type { CatalogSnapshot } from "./types/catalogs.ts";
 import { SessionHandle, type SessionAcquireOptions, type SessionAttachOptions } from "./session.ts";
 import { isRecord, requiredString } from "./types/common.ts";
-import { CatalogClient } from "./catalogs.ts";
+import { CatalogClient, type ModelCatalogOptions } from "./catalogs.ts";
 import { WorkflowClient } from "./workflows.ts";
 import { JobClient } from "./jobs.ts";
 import { HandoffClient } from "./handoffs.ts";
@@ -11,6 +12,10 @@ import { AutomationClient } from "./automations.ts";
 import { McpClient } from "./mcp.ts";
 
 export interface DoMoCodeClientOptions extends TransportOptions {}
+export interface CatalogOptions extends ModelCatalogOptions {
+  session?: SessionHandle;
+  includeSkillBody?: boolean;
+}
 
 export class DoMoCodeClient {
   readonly transport: Transport;
@@ -36,6 +41,21 @@ export class DoMoCodeClient {
   get baseURL(): string { return this.transport.baseURL; }
   get clientId(): string { return this.transport.clientId; }
   get owner(): string { return this.transport.owner; }
+
+  /**
+   * Read the global command/skill/agent/model inventory in one call. Tools are
+   * session-scoped; pass an already-open handle to include that live view.
+   */
+  async catalog(options: CatalogOptions = {}): Promise<CatalogSnapshot> {
+    const [commands, skills, agents, models] = await Promise.all([
+      this.catalogs.commands(),
+      this.catalogs.skills(options.includeSkillBody ? { includeBody: true } : {}),
+      this.catalogs.agents(),
+      this.catalogs.models(options)
+    ]);
+    const tools = options.session ? await options.session.tools() : [];
+    return { tools, commands: commands.commands, skills, agents, models };
+  }
 
   async capabilities(): Promise<ServerCapabilities | undefined> {
     try {

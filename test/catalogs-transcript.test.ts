@@ -49,6 +49,25 @@ test("skills catalog keeps bodies opt-in", async () => {
   server.close();
 });
 
+test("client.catalog returns one namespaced inventory", async () => {
+  const server = new MockDoMoServer({ skillCatalog: [{
+    name: "review",
+    keywords: [],
+    disableModelInvocation: false,
+    source: "project"
+  }] });
+  const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch });
+  const session = await client.sessions.create();
+  const catalog = await client.catalog({ session });
+  assert.equal(catalog.tools[0]?.name, "read");
+  assert.equal(catalog.commands[0]?.name, "help");
+  assert.equal(catalog.skills[0]?.name, "review");
+  assert.equal(catalog.agents[0]?.name, "default");
+  assert.equal(catalog.models[0]?.id, "mock-model");
+  await client.close();
+  server.close();
+});
+
 test("session tools and direct execution round-trip through the live catalog", async () => {
   const server = new MockDoMoServer();
   const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch, clientId: "tool-client", owner: "tests" });

@@ -30,6 +30,20 @@ export class DoMoCodeClient {
     get baseURL() { return this.transport.baseURL; }
     get clientId() { return this.transport.clientId; }
     get owner() { return this.transport.owner; }
+    /**
+     * Read the global command/skill/agent/model inventory in one call. Tools are
+     * session-scoped; pass an already-open handle to include that live view.
+     */
+    async catalog(options = {}) {
+        const [commands, skills, agents, models] = await Promise.all([
+            this.catalogs.commands(),
+            this.catalogs.skills(options.includeSkillBody ? { includeBody: true } : {}),
+            this.catalogs.agents(),
+            this.catalogs.models(options)
+        ]);
+        const tools = options.session ? await options.session.tools() : [];
+        return { tools, commands: commands.commands, skills, agents, models };
+    }
     async capabilities() {
         try {
             const value = await this.transport.json("/capabilities");

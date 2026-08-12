@@ -50,6 +50,16 @@ const skillWithBody = await client.catalogs.skills({ includeBody: true });
 The default response never includes `body`, which keeps large or sensitive skill instructions
 out of ordinary palette refreshes.
 
+For a single namespaced inventory, use `client.catalog()`. Pass an existing session handle to
+include its live tools; omitting it leaves `tools` empty because tools are session-scoped:
+
+```ts
+const catalog = await client.catalog({ session });
+catalog.tools;    // session tools
+catalog.commands; // global commands, including MCP prompts
+catalog.skills;   // global skills
+```
+
 `session.transcript()` and the standalone `renderTranscript()` helpers produce deterministic
 Markdown or escaped HTML from the lossless `/messages` projection. Base64 image bytes are
 never embedded; image media types are emitted as placeholders. Tool calls/results and

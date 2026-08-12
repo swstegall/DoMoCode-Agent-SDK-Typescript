@@ -19,6 +19,7 @@ export declare class CatalogClient {
     memory(): Promise<ProjectMemoryRecord[]>;
     snapshot(options?: ModelCatalogOptions): Promise<{
         commands: CommandRegistry;
+        skills: SkillDescriptor[];
         agents: AgentProfileSummary[];
         models: ModelOption[];
         memory: ProjectMemoryRecord[];

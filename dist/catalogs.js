@@ -30,8 +30,8 @@ export class CatalogClient {
         return requiredArray(await this.transport.json("/memory"), "memory").map(decodeProjectMemoryRecord);
     }
     async snapshot(options = {}) {
-        const [commands, agents, models, memory] = await Promise.all([this.commands(), this.agents(), this.models(options), this.memory()]);
-        return { commands, agents, models, memory };
+        const [commands, skills, agents, models, memory] = await Promise.all([this.commands(), this.skills(), this.agents(), this.models(options), this.memory()]);
+        return { commands, skills, agents, models, memory };
     }
 }
 export function decodeCommandRegistry(value) {
