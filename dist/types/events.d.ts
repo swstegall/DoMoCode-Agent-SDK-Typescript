@@ -115,12 +115,26 @@ export interface McpChangedEvent {
     type: "mcp_changed";
     server: string;
 }
+export interface OAuthRequestEvent {
+    type: "oauth_request";
+    id: string;
+    server: string;
+    authorizationUrl: string;
+    expiresAt: string;
+}
+export interface OAuthResolvedEvent {
+    type: "oauth_resolved";
+    id: string;
+    server: string;
+    status: OpenEnum<"connected" | "failed" | "cancelled">;
+    error?: string;
+}
 export interface UnknownEvent {
     type: string;
     raw: unknown;
     sequence?: number;
 }
-export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | UnknownEvent;
+export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | OAuthRequestEvent | OAuthResolvedEvent | UnknownEvent;
 export type SequencedServerEvent = ServerEvent & {
     sequence: number;
 };

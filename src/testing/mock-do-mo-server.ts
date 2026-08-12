@@ -4,7 +4,7 @@ import { uuidv7 } from "../uuid.ts";
 import type { JSONValue } from "../types/common.ts";
 import { isRecord } from "../types/common.ts";
 import type { QuestionPrompt } from "../types/asks.ts";
-import type { ServerEvent } from "../types/events.ts";
+import type { OAuthRequestEvent, ServerEvent } from "../types/events.ts";
 import type { Message } from "../types/messages.ts";
 import type { SessionClientAttachment, SessionRef, SessionStatus } from "../types/sessions.ts";
 import type { SkillDescriptor, ToolCatalogEntry } from "../types/catalogs.ts";
@@ -31,6 +31,7 @@ export interface MockDoMoServerOptions {
   capabilities?: string[];
   toolCatalog?: ToolCatalogEntry[];
   skillCatalog?: SkillDescriptor[];
+  oauthPending?: OAuthRequestEvent[];
 }
 
 interface SequencedEvent { sequence: number; event: ServerEvent }
@@ -91,6 +92,7 @@ export class MockDoMoServer {
   private readonly promptHandler: MockDoMoServerOptions["promptHandler"];
   private readonly toolCatalog: ToolCatalogEntry[];
   private readonly skillCatalog: SkillDescriptor[];
+  private readonly oauthPending: OAuthRequestEvent[];
   private readonly sessionsById = new Map<string, MockSession>();
   private closed = false;
 
@@ -103,6 +105,7 @@ export class MockDoMoServer {
     this.promptHandler = options.promptHandler;
     this.toolCatalog = options.toolCatalog ?? [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
     this.skillCatalog = options.skillCatalog ?? [];
+    this.oauthPending = options.oauthPending ?? [];
     this.fetch = this.handleFetch.bind(this);
   }
 
@@ -228,6 +231,7 @@ export class MockDoMoServer {
   private handleGlobal(method: string, parts: string[], url: URL, init?: RequestInit): Response {
     if (method === "GET" && parts[0] === "commands") return jsonResponse({ commands: [{ name: "help", description: "Mock command", source: "builtIn" }] });
     if (method === "GET" && parts[0] === "agents") return jsonResponse([{ name: "default", description: "Mock agent", mode: "build", source: "builtIn" }]);
+    if (method === "GET" && parts[0] === "oauth" && parts[1] === "pending") return jsonResponse(this.oauthPending);
     if (method === "GET" && parts[0] === "skills") {
       const includeBody = url.searchParams.get("include") === "body";
       return jsonResponse(this.skillCatalog.map((skill) => includeBody || skill.body === undefined ? skill : (({ body: _body, ...metadata }) => metadata)(skill)));

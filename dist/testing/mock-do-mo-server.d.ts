@@ -1,6 +1,6 @@
 import type { FetchFunction } from "../transport.ts";
 import { Transport } from "../transport.ts";
-import type { ServerEvent } from "../types/events.ts";
+import type { OAuthRequestEvent, ServerEvent } from "../types/events.ts";
 import type { Message } from "../types/messages.ts";
 import type { SessionRef } from "../types/sessions.ts";
 import type { SkillDescriptor, ToolCatalogEntry } from "../types/catalogs.ts";
@@ -24,6 +24,7 @@ export interface MockDoMoServerOptions {
     capabilities?: string[];
     toolCatalog?: ToolCatalogEntry[];
     skillCatalog?: SkillDescriptor[];
+    oauthPending?: OAuthRequestEvent[];
 }
 /**
  * A deterministic, protocol-shaped in-process DoMoCode server.
@@ -43,6 +44,7 @@ export declare class MockDoMoServer {
     private readonly promptHandler;
     private readonly toolCatalog;
     private readonly skillCatalog;
+    private readonly oauthPending;
     private readonly sessionsById;
     private closed;
     constructor(options?: MockDoMoServerOptions);

@@ -8,6 +8,7 @@ import { JobClient } from "./jobs.ts";
 import { HandoffClient } from "./handoffs.ts";
 import { AutomationClient } from "./automations.ts";
 import { McpClient } from "./mcp.ts";
+import { type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
 export interface DoMoCodeClientOptions extends TransportOptions {
 }
 export interface CatalogOptions extends ModelCatalogOptions {
@@ -23,6 +24,7 @@ export declare class DoMoCodeClient {
     readonly handoffs: HandoffClient;
     readonly automations: AutomationClient;
     readonly mcp: McpClient;
+    private clientInteractionRuntime;
     constructor(options: DoMoCodeClientOptions);
     get baseURL(): string;
     get clientId(): string;
@@ -32,6 +34,14 @@ export declare class DoMoCodeClient {
      * session-scoped; pass an already-open handle to include that live view.
      */
     catalog(options?: CatalogOptions): Promise<CatalogSnapshot>;
+    /** Aggregate permission, question, and server-scoped OAuth asks across sessions. */
+    interactions(options?: InteractionRuntimeOptions): AsyncIterableIterator<RuntimeInteraction>;
+    onInteraction(handler: InteractionHandler, options?: InteractionRuntimeOptions): () => void;
+    pendingInteractions(options?: InteractionRuntimeOptions): RuntimeInteraction[];
+    /** @internal Register an attached session with the client-level dispatcher. */
+    registerSession(session: SessionHandle): void;
+    private interactionRuntimeFor;
+    private refreshOAuthPending;
     capabilities(): Promise<ServerCapabilities | undefined>;
     close(): Promise<void>;
 }
@@ -48,6 +58,7 @@ export declare class SessionRegistry {
     forget(id: string): void;
     close(): Promise<void>;
     getOrCreate(ref: SessionRef): SessionHandle;
+    all(): SessionHandle[];
     releaseLease(id: string): void;
     private openRef;
 }

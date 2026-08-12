@@ -79,6 +79,8 @@ export function decodeServerEvent(value) {
                 } };
         }
         case "mcp_changed": return { type, server: requiredString(value.server, "server") };
+        case "oauth_request": return { type, id: requiredString(value.id, "id"), server: requiredString(value.server, "server"), authorizationUrl: requiredString(value.authorizationUrl, "authorizationUrl"), expiresAt: requiredString(value.expiresAt, "expiresAt") };
+        case "oauth_resolved": return { type, id: requiredString(value.id, "id"), server: requiredString(value.server, "server"), status: requiredString(value.status, "status"), ...(value.error === undefined || value.error === null ? {} : { error: requiredString(value.error, "error") }) };
         default: return { type, raw: value };
     }
 }

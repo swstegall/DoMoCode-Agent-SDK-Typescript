@@ -1,4 +1,5 @@
-import type { PermissionRequest, QuestionAnswer, QuestionPrompt } from "./types/asks.ts";
+import type { OAuthRequestEvent } from "./types/events.ts";
+import type { OAuthInteraction, PermissionRequest, QuestionAnswer, QuestionPrompt } from "./types/asks.ts";
 import type { SessionHandle } from "./session.ts";
 export type Decline = "decline";
 export type InteractionHandler = (ask: RuntimeInteraction) => Promise<void | Decline> | void | Decline;
@@ -21,6 +22,8 @@ export interface QuestionAsk {
     cancel(): Promise<void>;
     decline(): void;
 }
+export interface OAuthAsk extends OAuthInteraction {
+}
 export interface UnknownAsk {
     kind: string;
     id: string;
@@ -29,7 +32,7 @@ export interface UnknownAsk {
     signal: AbortSignal;
     decline(): void;
 }
-export type RuntimeInteraction = PermissionAsk | QuestionAsk | UnknownAsk;
+export type RuntimeInteraction = PermissionAsk | QuestionAsk | OAuthAsk | UnknownAsk;
 export interface PermissionPolicyOptions {
     rules?: Array<{
         pattern: string;
@@ -44,6 +47,7 @@ export interface PermissionPolicyOptions {
 export interface InteractionPolicy {
     permission?: (ask: PermissionAsk) => Promise<void>;
     question?: (ask: QuestionAsk) => Promise<void>;
+    oauth?: (ask: OAuthAsk) => Promise<void>;
 }
 export interface InteractionRuntimeOptions {
     /** Permit `ask.allow({always: true})`, which writes a durable server rule. */
@@ -54,6 +58,10 @@ export interface InteractionRuntimeOptions {
     idleMs?: number;
     /** Fallback policy used after explicit handlers and iterators decline an ask. */
     policy?: InteractionPolicy;
+    /** Include server-scoped OAuth requests in this dispatcher. */
+    includeOAuth?: boolean;
+    /** Opens an authorization URL. Kept injectable for Node and browser hosts. */
+    openOAuth?: (authorizationUrl: string) => Promise<boolean> | boolean;
 }
 /** Interaction registry and dispatcher for one or more session streams. */
 export declare class InteractionRuntime {
@@ -68,6 +76,8 @@ export declare class InteractionRuntime {
     /** Subscribe to a session and hydrate asks that predate the subscription. */
     attach(session: SessionHandle): Promise<() => void>;
     pending(): RuntimeInteraction[];
+    /** Admit a server-scoped OAuth request recovered from `/oauth/pending`. */
+    acceptOAuth(event: OAuthRequestEvent): void;
     interactions(): AsyncIterableIterator<RuntimeInteraction>;
     /** Add an explicit handler. Newer handlers run first. */
     onInteraction(handler: InteractionHandler): () => void;
@@ -80,6 +90,7 @@ export declare class InteractionRuntime {
     private warnStillPending;
     private permission;
     private question;
+    private oauth;
     private unknown;
     private resolve;
     private isPending;

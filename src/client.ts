@@ -4,12 +4,14 @@ import type { ServerCapabilities, SessionRef, SessionSummary } from "./types/ses
 import type { CatalogSnapshot } from "./types/catalogs.ts";
 import { SessionHandle, type SessionAcquireOptions, type SessionAttachOptions } from "./session.ts";
 import { isRecord, requiredString } from "./types/common.ts";
+import { decodeServerEvent } from "./types/events.ts";
 import { CatalogClient, type ModelCatalogOptions } from "./catalogs.ts";
 import { WorkflowClient } from "./workflows.ts";
 import { JobClient } from "./jobs.ts";
 import { HandoffClient } from "./handoffs.ts";
 import { AutomationClient } from "./automations.ts";
 import { McpClient } from "./mcp.ts";
+import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
 
 export interface DoMoCodeClientOptions extends TransportOptions {}
 export interface CatalogOptions extends ModelCatalogOptions {
@@ -26,6 +28,7 @@ export class DoMoCodeClient {
   readonly handoffs: HandoffClient;
   readonly automations: AutomationClient;
   readonly mcp: McpClient;
+  private clientInteractionRuntime: InteractionRuntime | undefined;
 
   constructor(options: DoMoCodeClientOptions) {
     this.transport = new Transport(options);
@@ -57,18 +60,66 @@ export class DoMoCodeClient {
     return { tools, commands: commands.commands, skills, agents, models };
   }
 
+  /** Aggregate permission, question, and server-scoped OAuth asks across sessions. */
+  interactions(options: InteractionRuntimeOptions = {}): AsyncIterableIterator<RuntimeInteraction> {
+    const runtime = this.interactionRuntimeFor(options);
+    void this.refreshOAuthPending(runtime);
+    return runtime.interactions();
+  }
+
+  onInteraction(handler: InteractionHandler, options: InteractionRuntimeOptions = {}): () => void {
+    const runtime = this.interactionRuntimeFor(options);
+    void this.refreshOAuthPending(runtime);
+    return runtime.onInteraction(handler);
+  }
+
+  pendingInteractions(options: InteractionRuntimeOptions = {}): RuntimeInteraction[] {
+    return this.interactionRuntimeFor(options).pending();
+  }
+
+  /** @internal Register an attached session with the client-level dispatcher. */
+  registerSession(session: SessionHandle): void {
+    if (!this.clientInteractionRuntime || !session.eventsEngine) return;
+    void this.clientInteractionRuntime.attach(session).catch(() => undefined);
+  }
+
+  private interactionRuntimeFor(options: InteractionRuntimeOptions): InteractionRuntime {
+    if (!this.clientInteractionRuntime) {
+      this.clientInteractionRuntime = new InteractionRuntime({ ...options, includeOAuth: true });
+      for (const session of this.sessions.all()) this.registerSession(session);
+    }
+    return this.clientInteractionRuntime;
+  }
+
+  private async refreshOAuthPending(runtime: InteractionRuntime): Promise<void> {
+    try {
+      const value = await this.transport.json<unknown>("/oauth/pending");
+      if (!Array.isArray(value)) return;
+      for (const item of value) {
+        const event = decodeServerEvent(item);
+        if (event.type === "oauth_request" && "authorizationUrl" in event) runtime.acceptOAuth(event);
+      }
+    } catch (error) {
+      if (!(error instanceof NotFoundError)) return;
+    }
+  }
+
   async capabilities(): Promise<ServerCapabilities | undefined> {
     try {
       const value = await this.transport.json<unknown>("/capabilities");
       if (!isRecord(value)) throw new TypeError("Capabilities response must be an object");
       return { name: requiredString(value.name, "capabilities.name"), version: requiredString(value.version, "capabilities.version"), protocolVersion: typeof value.protocolVersion === "number" ? value.protocolVersion : 1, capabilities: Array.isArray(value.capabilities) ? value.capabilities.map((item) => requiredString(item, "capability")) : [] };
     } catch (error) {
-      if (error instanceof NotFoundError) return undefined;
+      if (error instanceof NotFoundError) return;
       throw error;
     }
   }
 
-  async close(): Promise<void> { await this.sessions.close(); }
+  async close(): Promise<void> {
+    this.clientInteractionRuntime?.close();
+    this.clientInteractionRuntime = undefined;
+    await this.sessions.close();
+  }
 }
 
 export class SessionRegistry {
@@ -130,11 +181,14 @@ export class SessionRegistry {
     return handle;
   }
 
+  all(): SessionHandle[] { return [...this.handles.values()]; }
+
   releaseLease(id: string): void { this.exclusiveLeases.delete(id); }
 
   private async openRef(ref: SessionRef, options: SessionAttachOptions): Promise<SessionHandle> {
     const handle = this.getOrCreate(ref);
     await handle.attach(options);
+    this.client.registerSession(handle);
     return handle;
   }
 }

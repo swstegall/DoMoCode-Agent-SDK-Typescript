@@ -30,11 +30,21 @@ export interface QuestionInteraction {
     sessionId: string;
     questions: QuestionPrompt[];
 }
+export interface OAuthInteraction {
+    kind: "oauth";
+    id: string;
+    server: string;
+    authorizationUrl: string;
+    expiresAt: string;
+    signal: AbortSignal;
+    open(): Promise<boolean>;
+    decline(): void;
+}
 export interface UnknownInteraction {
     kind: string;
     id: string;
     sessionId?: string;
     raw: unknown;
 }
-export type PendingInteraction = PermissionInteraction | QuestionInteraction | UnknownInteraction;
+export type PendingInteraction = PermissionInteraction | QuestionInteraction | OAuthInteraction | UnknownInteraction;
 //# sourceMappingURL=asks.d.ts.map

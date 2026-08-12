@@ -37,6 +37,32 @@ test("permission asks expose capability methods and abort when resolved", async 
   server.close();
 });
 
+test("client interactions reconcile server-scoped OAuth pending asks", async () => {
+  let opened: string | undefined;
+  const server = new MockDoMoServer({ oauthPending: [{
+    type: "oauth_request",
+    id: "oauth-pending",
+    server: "github",
+    authorizationUrl: "https://auth.example.test/authorize?state=redacted",
+    expiresAt: "2026-08-11T00:00:00Z"
+  }] });
+  const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch });
+  const next = client.interactions({
+    warn: () => undefined,
+    openOAuth: (url) => { opened = url; return true; }
+  }).next();
+  const result = await withTimeout(next, 1_000);
+  assert.equal(result.done, false);
+  if (!result.done && result.value.kind === "oauth" && "open" in result.value) {
+    assert.equal(result.value.kind, "oauth");
+    assert.equal(result.value.server, "github");
+    assert.equal(await result.value.open(), true);
+    assert.equal(opened, "https://auth.example.test/authorize?state=redacted");
+  }
+  await client.close();
+  server.close();
+});
+
 test("handlers use LIFO precedence and decline passes to the next handler", async () => {
   const server = new MockDoMoServer({ autoComplete: false });
   const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch, clientId: "handler-client", owner: "tests" });
@@ -71,7 +97,7 @@ test("yolo answers questions and future request frames remain open-kind asks", a
   const server = new MockDoMoServer({ autoComplete: false });
   const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch: server.fetch, clientId: "policy-client", owner: "tests" });
   const session = await client.sessions.create();
-  const runtime = new InteractionRuntime({ policy: yolo(), warn: () => undefined });
+  const runtime = new InteractionRuntime({ policy: yolo(), includeOAuth: true, warn: () => undefined });
   await runtime.attach(session);
   const sequenceBeforeQuestion = session.eventsEngine?.lastSequence ?? 0;
   await server.requestQuestion(session.id, {
@@ -83,13 +109,13 @@ test("yolo answers questions and future request frames remain open-kind asks", a
   await waitFor(() => runtime.pending().length === 0);
 
   const next = runtime.interactions().next();
-  server.emit(session.id, { type: "oauth_request", id: "oauth-1", sessionId: session.id, authorizationUrl: "https://example.test" } as unknown as ServerEvent);
+  server.emit(session.id, { type: "oauth_request", id: "oauth-1", server: "github", authorizationUrl: "https://example.test", expiresAt: "2026-08-11T00:00:00Z" } as ServerEvent);
   const result = await withTimeout(next, 1_000);
   assert.equal(result.done, false);
-  if (!result.done) {
+  if (!result.done && result.value.kind === "oauth" && "open" in result.value) {
     assert.equal(result.value.kind, "oauth");
     assert.equal(result.value.id, "oauth-1");
-    assert.equal(result.value.sessionId, session.id);
+    assert.equal(result.value.server, "github");
   }
   runtime.close();
   await session.dispose();

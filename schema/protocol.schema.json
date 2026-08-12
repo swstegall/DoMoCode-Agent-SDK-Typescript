@@ -6,7 +6,7 @@
   "$defs": {
     "ServerEventName": {
       "type": "string",
-      "enum": ["connected", "heartbeat", "agent_start", "agent_end", "turn_start", "turn_end", "message_start", "message_delta", "message_end", "tool_start", "tool_end", "permission_request", "permission_resolved", "question_request", "question_resolved", "queue_update", "notice", "subagent", "mcp_changed"],
+      "enum": ["connected", "heartbeat", "agent_start", "agent_end", "turn_start", "turn_end", "message_start", "message_delta", "message_end", "tool_start", "tool_end", "permission_request", "permission_resolved", "question_request", "question_resolved", "queue_update", "notice", "subagent", "mcp_changed", "oauth_request", "oauth_resolved"],
       "x-open-enum": true
     },
     "AgentEndReason": {

@@ -66,7 +66,9 @@ export class InteractionRuntime {
             allowPersistentGrants: options.allowPersistentGrants ?? false,
             warn: options.warn ?? ((message) => console.warn(message)),
             idleMs: options.idleMs ?? 5_000,
-            ...(options.policy === undefined ? {} : { policy: options.policy })
+            ...(options.policy === undefined ? {} : { policy: options.policy }),
+            includeOAuth: options.includeOAuth ?? false,
+            ...(options.openOAuth === undefined ? {} : { openOAuth: options.openOAuth })
         };
         this.queue = new AskQueue((interaction) => this.claim(interaction));
     }
@@ -89,6 +91,12 @@ export class InteractionRuntime {
         };
     }
     pending() { return [...this.entries.values()].map((entry) => entry.interaction); }
+    /** Admit a server-scoped OAuth request recovered from `/oauth/pending`. */
+    acceptOAuth(event) {
+        if (!this.options.includeOAuth)
+            return;
+        this.accept(undefined, event);
+    }
     interactions() { return this.queue; }
     /** Add an explicit handler. Newer handlers run first. */
     onInteraction(handler) {
@@ -110,8 +118,12 @@ export class InteractionRuntime {
         this.entries.clear();
     }
     accept(session, event) {
-        if ((event.type === "permission_resolved" || event.type === "question_resolved") && "id" in event) {
+        if ((event.type === "permission_resolved" || event.type === "question_resolved") && "id" in event && session) {
             this.resolve(event.type === "permission_resolved" ? "permission" : "question", event.id, session.id);
+            return;
+        }
+        if (event.type === "oauth_resolved" && "id" in event) {
+            this.resolve("oauth", event.id);
             return;
         }
         let interaction;
@@ -119,12 +131,15 @@ export class InteractionRuntime {
             interaction = this.permission(session, event);
         else if (event.type === "question_request" && "id" in event)
             interaction = this.question(session, event);
+        else if (event.type === "oauth_request" && this.options.includeOAuth && "authorizationUrl" in event)
+            interaction = this.oauth(event);
         else if (event.type.endsWith("_request") && "raw" in event && isRecord(event.raw) && typeof event.raw.id === "string") {
             interaction = this.unknown(session, event.type.slice(0, -"_request".length), event.raw.id, event.raw);
         }
         if (!interaction)
             return;
-        const key = this.key(interaction.kind, interaction.id, interaction.sessionId);
+        const sessionId = "sessionId" in interaction ? interaction.sessionId : undefined;
+        const key = this.key(interaction.kind, interaction.id, sessionId);
         const previous = this.entries.get(key);
         if (previous)
             this.queue.remove((value) => value === previous.interaction);
@@ -138,7 +153,8 @@ export class InteractionRuntime {
         void this.dispatch(session, key, entry);
     }
     claim(interaction) {
-        const entry = this.entries.get(this.key(interaction.kind, interaction.id, interaction.sessionId));
+        const sessionId = "sessionId" in interaction ? interaction.sessionId : undefined;
+        const entry = this.entries.get(this.key(interaction.kind, interaction.id, sessionId));
         if (entry)
             entry.claimed = true;
     }
@@ -184,6 +200,10 @@ export class InteractionRuntime {
                 entry.claimed = true;
                 await policy.question(entry.interaction);
             }
+            else if (isOAuthAsk(entry.interaction) && policy?.oauth) {
+                entry.claimed = true;
+                await policy.oauth(entry.interaction);
+            }
             else {
                 this.warnUnhandled(entry.interaction);
             }
@@ -224,11 +244,14 @@ export class InteractionRuntime {
         if (this.options.idleMs < 0)
             return;
         setTimeout(() => {
-            if (this.entries.has(this.key(interaction.kind, interaction.id, interaction.sessionId)))
+            const sessionId = "sessionId" in interaction ? interaction.sessionId : undefined;
+            if (this.entries.has(this.key(interaction.kind, interaction.id, sessionId)))
                 this.options.warn(`DoMoCode interaction ${interaction.id} is still unanswered.`);
         }, this.options.idleMs);
     }
     permission(session, event) {
+        if (!session)
+            throw new TypeError("Permission interactions require a session");
         const allow = async (options = {}) => {
             if (options.always && (event.disableAlways || !this.options.allowPersistentGrants))
                 throw new PermissionGrantError();
@@ -250,6 +273,8 @@ export class InteractionRuntime {
         };
     }
     question(session, event) {
+        if (!session)
+            throw new TypeError("Question interactions require a session");
         return {
             kind: "question",
             id: event.id,
@@ -261,9 +286,33 @@ export class InteractionRuntime {
             decline: () => undefined
         };
     }
+    oauth(event) {
+        const controller = new AbortController();
+        return {
+            kind: "oauth",
+            id: event.id,
+            server: event.server,
+            authorizationUrl: event.authorizationUrl,
+            expiresAt: event.expiresAt,
+            signal: controller.signal,
+            open: async () => {
+                if (!this.options.openOAuth)
+                    return false;
+                return await this.options.openOAuth(event.authorizationUrl);
+            },
+            decline: () => controller.abort()
+        };
+    }
     unknown(session, kind, id, raw) {
-        const sessionId = isRecord(raw) && typeof raw.sessionId === "string" ? raw.sessionId : session.id;
-        return { kind, id, sessionId, raw, signal: new AbortController().signal, decline: () => undefined };
+        const sessionId = isRecord(raw) && typeof raw.sessionId === "string" ? raw.sessionId : session?.id;
+        return {
+            kind,
+            id,
+            raw,
+            ...(sessionId === undefined ? {} : { sessionId }),
+            signal: new AbortController().signal,
+            decline: () => undefined
+        };
     }
     resolve(kind, id, sessionId) {
         const key = this.key(kind, id, sessionId);
@@ -342,8 +391,11 @@ function isPermissionAsk(ask) {
 function isQuestionAsk(ask) {
     return ask.kind === "question" && "answer" in ask && typeof ask.answer === "function";
 }
+function isOAuthAsk(ask) {
+    return ask.kind === "oauth" && "open" in ask && typeof ask.open === "function";
+}
 function isUnknownAsk(ask) {
-    return !isPermissionAsk(ask) && !isQuestionAsk(ask);
+    return !isPermissionAsk(ask) && !isQuestionAsk(ask) && !isOAuthAsk(ask);
 }
 function delayUnlessAborted(milliseconds, signal) {
     if (signal.aborted || milliseconds <= 0)

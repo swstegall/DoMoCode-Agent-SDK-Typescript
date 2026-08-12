@@ -2,12 +2,14 @@ import { Transport, encodePathSegment } from "./transport.js";
 import { NotFoundError, SessionAlreadyAcquiredError } from "./types/errors.js";
 import { SessionHandle } from "./session.js";
 import { isRecord, requiredString } from "./types/common.js";
+import { decodeServerEvent } from "./types/events.js";
 import { CatalogClient } from "./catalogs.js";
 import { WorkflowClient } from "./workflows.js";
 import { JobClient } from "./jobs.js";
 import { HandoffClient } from "./handoffs.js";
 import { AutomationClient } from "./automations.js";
 import { McpClient } from "./mcp.js";
+import { InteractionRuntime } from "./interactionRuntime.js";
 export class DoMoCodeClient {
     transport;
     sessions;
@@ -17,6 +19,7 @@ export class DoMoCodeClient {
     handoffs;
     automations;
     mcp;
+    clientInteractionRuntime;
     constructor(options) {
         this.transport = new Transport(options);
         this.sessions = new SessionRegistry(this);
@@ -44,6 +47,50 @@ export class DoMoCodeClient {
         const tools = options.session ? await options.session.tools() : [];
         return { tools, commands: commands.commands, skills, agents, models };
     }
+    /** Aggregate permission, question, and server-scoped OAuth asks across sessions. */
+    interactions(options = {}) {
+        const runtime = this.interactionRuntimeFor(options);
+        void this.refreshOAuthPending(runtime);
+        return runtime.interactions();
+    }
+    onInteraction(handler, options = {}) {
+        const runtime = this.interactionRuntimeFor(options);
+        void this.refreshOAuthPending(runtime);
+        return runtime.onInteraction(handler);
+    }
+    pendingInteractions(options = {}) {
+        return this.interactionRuntimeFor(options).pending();
+    }
+    /** @internal Register an attached session with the client-level dispatcher. */
+    registerSession(session) {
+        if (!this.clientInteractionRuntime || !session.eventsEngine)
+            return;
+        void this.clientInteractionRuntime.attach(session).catch(() => undefined);
+    }
+    interactionRuntimeFor(options) {
+        if (!this.clientInteractionRuntime) {
+            this.clientInteractionRuntime = new InteractionRuntime({ ...options, includeOAuth: true });
+            for (const session of this.sessions.all())
+                this.registerSession(session);
+        }
+        return this.clientInteractionRuntime;
+    }
+    async refreshOAuthPending(runtime) {
+        try {
+            const value = await this.transport.json("/oauth/pending");
+            if (!Array.isArray(value))
+                return;
+            for (const item of value) {
+                const event = decodeServerEvent(item);
+                if (event.type === "oauth_request" && "authorizationUrl" in event)
+                    runtime.acceptOAuth(event);
+            }
+        }
+        catch (error) {
+            if (!(error instanceof NotFoundError))
+                return;
+        }
+    }
     async capabilities() {
         try {
             const value = await this.transport.json("/capabilities");
@@ -53,11 +100,15 @@ export class DoMoCodeClient {
         }
         catch (error) {
             if (error instanceof NotFoundError)
-                return undefined;
+                return;
             throw error;
         }
     }
-    async close() { await this.sessions.close(); }
+    async close() {
+        this.clientInteractionRuntime?.close();
+        this.clientInteractionRuntime = undefined;
+        await this.sessions.close();
+    }
 }
 export class SessionRegistry {
     client;
@@ -117,10 +168,12 @@ export class SessionRegistry {
         this.handles.set(ref.id, handle);
         return handle;
     }
+    all() { return [...this.handles.values()]; }
     releaseLease(id) { this.exclusiveLeases.delete(id); }
     async openRef(ref, options) {
         const handle = this.getOrCreate(ref);
         await handle.attach(options);
+        this.client.registerSession(handle);
         return handle;
     }
 }

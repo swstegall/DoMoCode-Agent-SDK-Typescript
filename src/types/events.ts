@@ -46,9 +46,11 @@ export interface SubagentTaskEvent {
 }
 export interface SubagentEvent { type: "subagent"; subagent: SubagentTaskEvent }
 export interface McpChangedEvent { type: "mcp_changed"; server: string }
+export interface OAuthRequestEvent { type: "oauth_request"; id: string; server: string; authorizationUrl: string; expiresAt: string }
+export interface OAuthResolvedEvent { type: "oauth_resolved"; id: string; server: string; status: OpenEnum<"connected" | "failed" | "cancelled">; error?: string }
 export interface UnknownEvent { type: string; raw: unknown; sequence?: number }
 
-export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | UnknownEvent;
+export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | OAuthRequestEvent | OAuthResolvedEvent | UnknownEvent;
 export type SequencedServerEvent = ServerEvent & { sequence: number };
 
 export class WireDecodeError extends TypeError {
@@ -130,6 +132,8 @@ export function decodeServerEvent(value: unknown): ServerEvent {
       } };
     }
     case "mcp_changed": return { type, server: requiredString(value.server, "server") };
+    case "oauth_request": return { type, id: requiredString(value.id, "id"), server: requiredString(value.server, "server"), authorizationUrl: requiredString(value.authorizationUrl, "authorizationUrl"), expiresAt: requiredString(value.expiresAt, "expiresAt") };
+    case "oauth_resolved": return { type, id: requiredString(value.id, "id"), server: requiredString(value.server, "server"), status: requiredString(value.status, "status") as OAuthResolvedEvent["status"], ...(value.error === undefined || value.error === null ? {} : { error: requiredString(value.error, "error") }) };
     default: return { type, raw: value };
   }
 }
