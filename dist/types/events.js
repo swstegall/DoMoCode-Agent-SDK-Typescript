@@ -78,6 +78,7 @@ export function decodeServerEvent(value) {
                     ...(subagent.error === undefined ? {} : { error: requiredString(subagent.error, "error") })
                 } };
         }
+        case "mcp_changed": return { type, server: requiredString(value.server, "server") };
         default: return { type, raw: value };
     }
 }

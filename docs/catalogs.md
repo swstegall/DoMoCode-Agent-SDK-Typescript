@@ -33,16 +33,32 @@ Markdown or escaped HTML from the lossless `/messages` projection. Base64 image 
 never embedded; image media types are emitted as placeholders. Tool calls/results and
 reasoning are retained by default.
 
-## MCP fallback
+## MCP administration and fallback
 
-Until the server exposes MCP administration routes, filter the live session catalog and use
-the server-owned `mcp_resource` direct tool:
+When the server advertises the MCP admin surface, the process-scoped MCP catalog is
+available through `client.mcp`:
+
+```ts
+const servers = await client.mcp.servers();
+const resources = await client.mcp.resources("github");
+const templates = await client.mcp.resourceTemplates("github");
+const contents = await client.mcp.readResource("github", "mcp://README");
+const health = await client.mcp.health("github");
+```
+
+Status and resource/template reads use a short cache by default. Pass `{ maxAgeMs: 0 }`
+for an immediate read, or call `client.mcp.invalidate(server)` after an out-of-band change.
+Session event engines invalidate the affected server automatically when the server emits
+an `mcp_changed` frame. The SDK consumes these projections; it never starts an MCP process
+or handles MCP credentials.
+
+On older servers without the admin routes, filter the live session catalog and use the
+server-owned `mcp_resource` direct tool:
 
 ```ts
 const mcpTools = await session.tools({ source: "mcp", mcpServer: "github" });
 await session.mcpResource("read", { server: "github", uri: "mcp://README" });
 ```
 
-The SDK never starts an MCP process or handles MCP credentials. The public testing subpath
-ships `McpStdioServer`, `mcpStdioServerCommand()`, and `mcpStdioSettingsSnippet()` for a
-deterministic stdio fixture.
+The public testing subpath ships `McpStdioServer`, `mcpStdioServerCommand()`, and
+`mcpStdioSettingsSnippet()` for a deterministic stdio fixture.

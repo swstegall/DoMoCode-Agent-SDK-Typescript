@@ -88,6 +88,9 @@ export class SessionHandle {
         revive: async (signal) => { await this.client.transport.json("/session", { method: "POST", body: { resume: this.id }, signal }); },
         reconcile: (signal) => this.reconcile(signal)
       });
+      this.engine.onEvent((event) => {
+        if (event.type === "mcp_changed" && "server" in event) this.client.mcp.invalidate(event.server);
+      });
       this.engine.start();
     }
     return attachment;

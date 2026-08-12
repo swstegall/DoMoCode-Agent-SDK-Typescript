@@ -30,5 +30,5 @@ The high-level `query()`/`runQuery()` layer is documented in [`docs/query.md`](d
 
 Child-session monitoring and task resumption are documented in [`docs/subagents.md`](docs/subagents.md).
 
-MCP fallback filtering and the deterministic stdio fixture are documented in
-[`docs/catalogs.md`](docs/catalogs.md).
+MCP administration, fallback filtering, and the deterministic stdio fixture are documented
+in [`docs/catalogs.md`](docs/catalogs.md).

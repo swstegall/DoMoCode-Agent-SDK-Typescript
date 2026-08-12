@@ -7,6 +7,7 @@ import { WorkflowClient } from "./workflows.js";
 import { JobClient } from "./jobs.js";
 import { HandoffClient } from "./handoffs.js";
 import { AutomationClient } from "./automations.js";
+import { McpClient } from "./mcp.js";
 export class DoMoCodeClient {
     transport;
     sessions;
@@ -15,6 +16,7 @@ export class DoMoCodeClient {
     jobs;
     handoffs;
     automations;
+    mcp;
     constructor(options) {
         this.transport = new Transport(options);
         this.sessions = new SessionRegistry(this);
@@ -23,6 +25,7 @@ export class DoMoCodeClient {
         this.jobs = new JobClient(this.transport);
         this.handoffs = new HandoffClient(this.transport);
         this.automations = new AutomationClient(this.transport);
+        this.mcp = new McpClient(this.transport);
     }
     get baseURL() { return this.transport.baseURL; }
     get clientId() { return this.transport.clientId; }

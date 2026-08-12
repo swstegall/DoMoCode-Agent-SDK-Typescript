@@ -8,6 +8,7 @@ import { WorkflowClient } from "./workflows.ts";
 import { JobClient } from "./jobs.ts";
 import { HandoffClient } from "./handoffs.ts";
 import { AutomationClient } from "./automations.ts";
+import { McpClient } from "./mcp.ts";
 
 export interface DoMoCodeClientOptions extends TransportOptions {}
 
@@ -19,6 +20,7 @@ export class DoMoCodeClient {
   readonly jobs: JobClient;
   readonly handoffs: HandoffClient;
   readonly automations: AutomationClient;
+  readonly mcp: McpClient;
 
   constructor(options: DoMoCodeClientOptions) {
     this.transport = new Transport(options);
@@ -28,6 +30,7 @@ export class DoMoCodeClient {
     this.jobs = new JobClient(this.transport);
     this.handoffs = new HandoffClient(this.transport);
     this.automations = new AutomationClient(this.transport);
+    this.mcp = new McpClient(this.transport);
   }
 
   get baseURL(): string { return this.transport.baseURL; }

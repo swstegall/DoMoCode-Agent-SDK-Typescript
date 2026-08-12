@@ -13,6 +13,7 @@ export * from "./workflows.ts";
 export * from "./jobs.ts";
 export * from "./handoffs.ts";
 export * from "./automations.ts";
+export * from "./mcp.ts";
 export * from "./session.ts";
 export * from "./interactionRuntime.ts";
 export * from "./transcript.ts";
@@ -28,4 +29,5 @@ export * from "./types/events.ts";
 export * from "./types/messages.ts";
 export * from "./types/sessions.ts";
 export * from "./types/tools.ts";
+export * from "./types/mcp.ts";
 //# sourceMappingURL=index.d.ts.map

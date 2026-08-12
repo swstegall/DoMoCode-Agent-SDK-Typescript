@@ -13,6 +13,7 @@ export * from "./workflows.js";
 export * from "./jobs.js";
 export * from "./handoffs.js";
 export * from "./automations.js";
+export * from "./mcp.js";
 export * from "./session.js";
 export * from "./interactionRuntime.js";
 export * from "./transcript.js";
@@ -28,4 +29,5 @@ export * from "./types/events.js";
 export * from "./types/messages.js";
 export * from "./types/sessions.js";
 export * from "./types/tools.js";
+export * from "./types/mcp.js";
 //# sourceMappingURL=index.js.map

@@ -45,9 +45,10 @@ export interface SubagentTaskEvent {
   error?: string;
 }
 export interface SubagentEvent { type: "subagent"; subagent: SubagentTaskEvent }
+export interface McpChangedEvent { type: "mcp_changed"; server: string }
 export interface UnknownEvent { type: string; raw: unknown; sequence?: number }
 
-export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | UnknownEvent;
+export type ServerEvent = ConnectedEvent | HeartbeatEvent | AgentStartEvent | AgentEndEvent | TurnStartEvent | TurnEndEvent | MessageStartEvent | MessageDeltaEvent | MessageEndEvent | ToolStartEvent | ToolEndEvent | PermissionRequestEvent | PermissionResolvedEvent | QuestionRequestEvent | QuestionResolvedEvent | QueueUpdateEvent | NoticeEvent | SubagentEvent | McpChangedEvent | UnknownEvent;
 export type SequencedServerEvent = ServerEvent & { sequence: number };
 
 export class WireDecodeError extends TypeError {
@@ -128,6 +129,7 @@ export function decodeServerEvent(value: unknown): ServerEvent {
         ...(subagent.error === undefined ? {} : { error: requiredString(subagent.error, "error") })
       } };
     }
+    case "mcp_changed": return { type, server: requiredString(value.server, "server") };
     default: return { type, raw: value };
   }
 }
