@@ -106,6 +106,10 @@ export class RunStalledError extends DoMoError {
   constructor(pendingInteractions: unknown[]) { super("The run is waiting for an unanswered interaction."); this.name = "RunStalledError"; this.pendingInteractions = pendingInteractions; }
 }
 
+export class PermissionGrantError extends DoMoError {
+  constructor() { super("Persistent permission grants require allowPersistentGrants: true."); this.name = "PermissionGrantError"; }
+}
+
 export function redactSecrets(value: string): string {
   return value
     .replace(/(authorization\s*:\s*bearer\s+)[^\s,;]+/gi, "$1[REDACTED]")

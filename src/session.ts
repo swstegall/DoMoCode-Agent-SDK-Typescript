@@ -1,12 +1,14 @@
 import { EventEngine, type EventListener } from "./eventEngine.ts";
 import { Transport, encodePathSegment } from "./transport.ts";
 import { decodeMessage, type ImageBlock, type Message } from "./types/messages.ts";
-import type { ServerEvent } from "./types/events.ts";
+import { decodeServerEvent, type ServerEvent } from "./types/events.ts";
+import type { QuestionAnswer } from "./types/asks.ts";
 import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredString } from "./types/common.ts";
 import type { AbortResult, ContextSnapshot, DirectToolResult, ForceClearResult, GitDiff, RunResult, ServerCapabilities, SessionAccounting, SessionClientAttachment, SessionClientEvent, SessionClientJournalEntry, SessionRef, SessionStatus, SessionSummary, SessionTreeEntry, WorkspaceHistoryResult, WorkspaceSnapshotStatus } from "./types/sessions.ts";
 import { asDecimalString } from "./types/decimal.ts";
 import { AttachRejectedError, AuthorityUnavailableError, ConflictError, DoMoError, NotFoundError, RunStalledError, RunStateRaceError, SessionAlreadyAcquiredError, SessionBusyError } from "./types/errors.ts";
 import type { DoMoCodeClient } from "./client.ts";
+import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
 
 export type AuthorityPreference = "require" | "prefer" | "observer";
 export interface SessionAttachOptions { authority?: AuthorityPreference }
@@ -27,6 +29,7 @@ export class SessionHandle {
   private leaseRelease: (() => void) | undefined;
   private leaseMode: "exclusive" | "shared" | undefined;
   private cursor = 0;
+  private interactionRuntime: InteractionRuntime | undefined;
 
   constructor(client: DoMoCodeClient, ref: SessionRef, forget: () => void) { this.client = client; this.ref = ref; this.forget = forget; }
   get id(): string { return this.ref.id; }
@@ -84,6 +87,26 @@ export class SessionHandle {
 
   events(): EventEngine { this.assertUsable(); if (!this.engine) throw new Error("Session is not attached"); return this.engine; }
   onEvent(listener: EventListener): () => void { return this.events().onEvent(listener); }
+
+  /** Return the session's single interaction dispatcher, creating it lazily. */
+  interactionRuntimeFor(options: InteractionRuntimeOptions = {}): InteractionRuntime {
+    this.assertUsable();
+    if (!this.interactionRuntime) {
+      this.interactionRuntime = new InteractionRuntime(options);
+      void this.interactionRuntime.attach(this).catch((error) => {
+        options.warn?.(`DoMoCode interaction reconcile failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+    return this.interactionRuntime;
+  }
+
+  interactions(options: InteractionRuntimeOptions = {}): AsyncIterableIterator<RuntimeInteraction> {
+    return this.interactionRuntimeFor(options).interactions();
+  }
+
+  onInteraction(handler: InteractionHandler, options: InteractionRuntimeOptions = {}): () => void {
+    return this.interactionRuntimeFor(options).onInteraction(handler);
+  }
 
   async prompt(text: string, options: PromptOptions = {}): Promise<void> { await this.postPrompt("prompt", text, options); }
   async steer(text: string, options: PromptOptions = {}): Promise<void> { await this.postPrompt("steer", text, options); }
@@ -165,11 +188,33 @@ export class SessionHandle {
 
   async tools(): Promise<unknown[]> { const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/tools")); return requiredArray(value, "tools"); }
 
+  async answerPermission(requestId: string, reply: "once" | "always" | "reject", message?: string): Promise<void> {
+    const body = { requestID: requestId, reply, ...(message === undefined ? {} : { message }) };
+    await this.client.transport.json(sessionPath(this.id, "/permission"), { method: "POST", body });
+  }
+
+  async answerQuestion(requestId: string, answers: QuestionAnswer[] | null): Promise<void> {
+    await this.client.transport.json(sessionPath(this.id, "/question"), { method: "POST", body: { requestID: requestId, answers } });
+  }
+
+  async pendingPermissions(): Promise<ServerEvent[]> {
+    const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/permissions"));
+    return requiredArray(value, "permissions").map(decodeServerEvent);
+  }
+
+  async pendingQuestions(): Promise<ServerEvent[]> {
+    const value = await this.client.transport.json<unknown>(sessionPath(this.id, "/questions"));
+    return requiredArray(value, "questions").map(decodeServerEvent);
+  }
+
   async settled(options: SettleOptions = {}): Promise<SettleResult> {
     const idle = options.maxIdleMs ?? 5_000;
     const initial = await this.status();
-    if (!initial.running) return { stopReason: "idle", status: initial };
-    const pending: unknown[] = [];
+    if (!initial.running) {
+      const pending = await this.pendingInteractionPayloads(initial);
+      if (pending.length > 0) throw new RunStalledError(pending);
+      return { stopReason: "idle", status: initial };
+    }
     let reason: string | undefined;
     const unsubscribe = this.engine?.onEvent((event) => {
       if (event.type === "agent_end" && "reason" in event) reason = event.reason;
@@ -178,11 +223,14 @@ export class SessionHandle {
     try {
       while (Date.now() - started < idle) {
         const current = await this.status();
-        if (!current.running) return { stopReason: reason ?? "completed", status: current };
-        if (current.pendingPermissionIds.length > 0) pending.push(...current.pendingPermissionIds);
-        if (current.pendingQuestionIds) pending.push(...current.pendingQuestionIds);
+        if (!current.running) {
+          const pending = await this.pendingInteractionPayloads(current);
+          if (pending.length > 0) throw new RunStalledError(pending);
+          return { stopReason: reason ?? "completed", status: current };
+        }
         await delay(50);
       }
+      const pending = await this.pendingInteractionPayloads(await this.status());
       if (pending.length > 0) throw new RunStalledError(pending);
       return { stopReason: reason ?? "unknown", status: await this.status() };
     } finally { unsubscribe?.(); }
@@ -246,6 +294,7 @@ export class SessionHandle {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    this.interactionRuntime?.close();
     try { if (this.engine) await this.engine.stop(); } catch { /* disposal is best effort */ }
     try { if (this.engine && this.engine.lastSequence > this.cursor && this.attachment) await this.advanceCursor(this.engine.lastSequence); } catch { /* best effort */ }
     try { if (this.attachment?.role === "authority") await this.releaseAuthority(); } catch { /* best effort */ }
@@ -261,6 +310,38 @@ export class SessionHandle {
     this.assertUsable();
     const body = options.images && options.images.length > 0 ? { prompt: text, images: options.images } : { prompt: text };
     await this.client.transport.json(sessionPath(this.id, `/${route}`), { method: "POST", body, expectedStatus: 202 });
+  }
+
+  private async pendingInteractionPayloads(status: SessionStatus): Promise<unknown[]> {
+    const permissionIds = new Set(status.pendingPermissionIds);
+    const questionIds = new Set(status.pendingQuestionIds ?? []);
+    const payloads: unknown[] = [];
+    const known = new Set<string>();
+    for (const interaction of this.interactionRuntime?.pending() ?? []) {
+      const key = interaction.kind === "permission" ? `permission:${interaction.id}` : interaction.kind === "question" ? `question:${interaction.id}` : `${interaction.kind}:${interaction.id}`;
+      if ((interaction.kind === "permission" && permissionIds.has(interaction.id)) || (interaction.kind === "question" && questionIds.has(interaction.id)) || (interaction.kind !== "permission" && interaction.kind !== "question")) {
+        payloads.push(interaction);
+        known.add(key);
+      }
+    }
+    if (permissionIds.size === 0 && questionIds.size === 0) return payloads;
+
+    const pendingEvents = await Promise.all([
+      this.pendingPermissions().catch(() => []),
+      this.pendingQuestions().catch(() => [])
+    ]);
+    for (const event of pendingEvents.flat()) {
+      if (event.type === "permission_request" && "id" in event && permissionIds.has(event.id)) {
+        const key = `permission:${event.id}`;
+        if (!known.has(key)) { payloads.push(event); known.add(key); }
+      } else if (event.type === "question_request" && "id" in event && questionIds.has(event.id)) {
+        const key = `question:${event.id}`;
+        if (!known.has(key)) { payloads.push(event); known.add(key); }
+      }
+    }
+    for (const id of permissionIds) if (!known.has(`permission:${id}`)) payloads.push({ kind: "permission", id, sessionId: this.id, raw: { id, sessionId: this.id, source: "status" } });
+    for (const id of questionIds) if (!known.has(`question:${id}`)) payloads.push({ kind: "question", id, sessionId: this.id, raw: { id, sessionId: this.id, source: "status" } });
+    return payloads;
   }
 
   private async reconcile(signal: AbortSignal): Promise<unknown[]> {

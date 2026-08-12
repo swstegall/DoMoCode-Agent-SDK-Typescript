@@ -75,5 +75,8 @@ export declare class RunStalledError extends DoMoError {
     readonly pendingInteractions: unknown[];
     constructor(pendingInteractions: unknown[]);
 }
+export declare class PermissionGrantError extends DoMoError {
+    constructor();
+}
 export declare function redactSecrets(value: string): string;
 //# sourceMappingURL=errors.d.ts.map

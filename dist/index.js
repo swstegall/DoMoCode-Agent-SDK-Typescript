@@ -8,6 +8,7 @@ export * from "./sse.js";
 export * from "./eventEngine.js";
 export * from "./client.js";
 export * from "./session.js";
+export * from "./interactionRuntime.js";
 export * from "./types/asks.js";
 export * from "./types/catalogs.js";
 export * from "./types/common.js";

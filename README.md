@@ -20,3 +20,6 @@ lifecycle scripts: a GitHub install must work without running arbitrary reposito
 
 The implementation follows [DOMOCODE_SDK_PLAN.md](../DOMOCODE_SDK_PLAN.md). The JSON Schema in
 `schema/` is the wire-contract source of truth; generated types and build output are checked in.
+
+Interaction handling is documented in [`docs/interactions.md`](docs/interactions.md). Sessions
+provide both capability-object asks (`ask.allow()`, `ask.answer()`) and low-level answer methods.

@@ -1,7 +1,10 @@
 import { EventEngine, type EventListener } from "./eventEngine.ts";
 import { type ImageBlock, type Message } from "./types/messages.ts";
+import { type ServerEvent } from "./types/events.ts";
+import type { QuestionAnswer } from "./types/asks.ts";
 import type { ContextSnapshot, GitDiff, RunResult, SessionAccounting, SessionClientAttachment, SessionClientEvent, SessionClientJournalEntry, SessionRef, SessionStatus, SessionTreeEntry, WorkspaceHistoryResult, WorkspaceSnapshotStatus } from "./types/sessions.ts";
 import type { DoMoCodeClient } from "./client.ts";
+import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
 export type AuthorityPreference = "require" | "prefer" | "observer";
 export interface SessionAttachOptions {
     authority?: AuthorityPreference;
@@ -33,6 +36,7 @@ export declare class SessionHandle {
     private leaseRelease;
     private leaseMode;
     private cursor;
+    private interactionRuntime;
     constructor(client: DoMoCodeClient, ref: SessionRef, forget: () => void);
     get id(): string;
     get path(): string;
@@ -44,6 +48,10 @@ export declare class SessionHandle {
     attach(options?: SessionAttachOptions): Promise<SessionClientAttachment>;
     events(): EventEngine;
     onEvent(listener: EventListener): () => void;
+    /** Return the session's single interaction dispatcher, creating it lazily. */
+    interactionRuntimeFor(options?: InteractionRuntimeOptions): InteractionRuntime;
+    interactions(options?: InteractionRuntimeOptions): AsyncIterableIterator<RuntimeInteraction>;
+    onInteraction(handler: InteractionHandler, options?: InteractionRuntimeOptions): () => void;
     prompt(text: string, options?: PromptOptions): Promise<void>;
     steer(text: string, options?: PromptOptions): Promise<void>;
     send(text: string, options?: SendOptions): Promise<void>;
@@ -63,6 +71,10 @@ export declare class SessionHandle {
     moveLeaf(targetId: string | null): Promise<void>;
     commitMessage(): Promise<string | undefined>;
     tools(): Promise<unknown[]>;
+    answerPermission(requestId: string, reply: "once" | "always" | "reject", message?: string): Promise<void>;
+    answerQuestion(requestId: string, answers: QuestionAnswer[] | null): Promise<void>;
+    pendingPermissions(): Promise<ServerEvent[]>;
+    pendingQuestions(): Promise<ServerEvent[]>;
     settled(options?: SettleOptions): Promise<SettleResult>;
     run(prompt: string, options?: PromptOptions & SettleOptions): Promise<RunResult>;
     attachAuthority(): Promise<SessionClientAttachment>;
@@ -85,6 +97,7 @@ export declare class SessionHandle {
     dispose(): Promise<void>;
     [Symbol.asyncDispose](): Promise<void>;
     private postPrompt;
+    private pendingInteractionPayloads;
     private reconcile;
     private assertUsable;
 }

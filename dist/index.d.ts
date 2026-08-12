@@ -8,6 +8,7 @@ export * from "./sse.ts";
 export * from "./eventEngine.ts";
 export * from "./client.ts";
 export * from "./session.ts";
+export * from "./interactionRuntime.ts";
 export * from "./types/asks.ts";
 export * from "./types/catalogs.ts";
 export * from "./types/common.ts";
