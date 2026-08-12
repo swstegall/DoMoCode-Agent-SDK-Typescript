@@ -317,6 +317,8 @@ export interface AutomationEvent extends CursorEvent {
   metadata: Record<string, JSONValue>;
 }
 
+export type AutomationAuditEvent = AutomationEvent;
+
 export interface AutomationJournalEntry {
   event: AutomationEvent;
   definition: AutomationDefinition;
