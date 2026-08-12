@@ -1,0 +1,48 @@
+name: Cross-repository conformance
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-mock:
+    name: SDK deterministic conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.4.0
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+  swift-server:
+    name: DoMoCode main conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: swstegall/DoMoCode
+          path: DoMoCode
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.4.0
+          cache: npm
+      - uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: "6.3.3"
+      - run: swift build --product domo
+        working-directory: DoMoCode
+      - run: npm ci
+      - run: npm run build
+      - run: npm run conformance
+        env:
+          DOMO_BIN: ${{ github.workspace }}/DoMoCode/.build/debug/domo
