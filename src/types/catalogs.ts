@@ -5,6 +5,14 @@ export type PromptResourceSource = OpenEnum<"builtin" | "user" | "project">;
 export type CommandKind = OpenEnum<"local" | "prompt">;
 export type ToolPermissionState = OpenEnum<"allowed" | "requiresApproval" | "denied" | "unavailable">;
 
+export interface ToolCatalogFilter {
+  source?: CatalogSource;
+  mcpServer?: string;
+  mcpTransport?: string;
+  permission?: ToolPermissionState;
+  includeHidden?: boolean;
+}
+
 export interface ToolCatalogEntry {
   name: string;
   description?: string;

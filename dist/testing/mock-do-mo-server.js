@@ -33,6 +33,7 @@ export class MockDoMoServer {
     fetch;
     autoComplete;
     promptHandler;
+    toolCatalog;
     sessionsById = new Map();
     closed = false;
     constructor(options = {}) {
@@ -42,6 +43,7 @@ export class MockDoMoServer {
         this.capabilities = options.capabilities ?? ["session-events", "questions", "permissions", "client-ledger"];
         this.autoComplete = options.autoComplete ?? true;
         this.promptHandler = options.promptHandler;
+        this.toolCatalog = options.toolCatalog ?? [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
         this.fetch = this.handleFetch.bind(this);
     }
     transport(options = {}) {
@@ -414,7 +416,7 @@ export class MockDoMoServer {
         return jsonResponse(target);
     }
     tools(_session) {
-        return [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
+        return this.toolCatalog;
     }
     status(session) {
         return { sessionId: session.ref.id, running: session.running, pendingPermissionIds: [...session.permissions.keys()], pendingQuestionIds: [...session.questions.keys()], subscribers: session.streams.size, queuedMessageCount: session.queued, mode: session.mode, agent: "default" };

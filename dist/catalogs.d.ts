@@ -1,5 +1,5 @@
 import type { Transport } from "./transport.ts";
-import type { AgentProfileSummary, CommandDescriptor, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, ToolCatalogEntry } from "./types/catalogs.ts";
+import type { AgentProfileSummary, CommandDescriptor, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, ToolCatalogEntry, ToolCatalogFilter } from "./types/catalogs.ts";
 export interface ModelCatalogOptions {
     maxAgeMs?: number;
 }
@@ -27,5 +27,6 @@ export declare function decodeModelOption(value: unknown): ModelOption;
 export declare function decodeProjectMemoryRecord(value: unknown): ProjectMemoryRecord;
 export declare function decodeToolCatalogEntry(value: unknown): ToolCatalogEntry;
 export declare function decodeToolCatalog(value: unknown): ToolCatalogEntry[];
+export declare function filterToolCatalog(tools: readonly ToolCatalogEntry[], filter?: ToolCatalogFilter): ToolCatalogEntry[];
 export declare function decodeMemoryRecords(value: unknown): MemoryRecord[];
 //# sourceMappingURL=catalogs.d.ts.map

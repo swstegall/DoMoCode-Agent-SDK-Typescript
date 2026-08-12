@@ -32,3 +32,17 @@ command escape hatch. Both return `DirectToolResult`; image payloads are represe
 Markdown or escaped HTML from the lossless `/messages` projection. Base64 image bytes are
 never embedded; image media types are emitted as placeholders. Tool calls/results and
 reasoning are retained by default.
+
+## MCP fallback
+
+Until the server exposes MCP administration routes, filter the live session catalog and use
+the server-owned `mcp_resource` direct tool:
+
+```ts
+const mcpTools = await session.tools({ source: "mcp", mcpServer: "github" });
+await session.mcpResource("read", { server: "github", uri: "mcp://README" });
+```
+
+The SDK never starts an MCP process or handles MCP credentials. The public testing subpath
+ships `McpStdioServer`, `mcpStdioServerCommand()`, and `mcpStdioSettingsSnippet()` for a
+deterministic stdio fixture.

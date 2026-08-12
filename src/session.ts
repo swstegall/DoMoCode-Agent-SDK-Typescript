@@ -9,8 +9,8 @@ import { asDecimalString } from "./types/decimal.ts";
 import { AttachRejectedError, AuthorityUnavailableError, ConflictError, DoMoError, NotFoundError, RunStalledError, RunStateRaceError, SessionAlreadyAcquiredError, SessionBusyError } from "./types/errors.ts";
 import type { DoMoCodeClient } from "./client.ts";
 import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
-import { decodeToolCatalog } from "./catalogs.ts";
-import type { ToolCatalogEntry } from "./types/catalogs.ts";
+import { decodeToolCatalog, filterToolCatalog } from "./catalogs.ts";
+import type { ToolCatalogEntry, ToolCatalogFilter } from "./types/catalogs.ts";
 import { renderTranscript, type TranscriptOptions } from "./transcript.ts";
 import { SubagentRegistry, type SubagentRegistryOptions } from "./subagents.ts";
 
@@ -22,6 +22,8 @@ export interface SendOptions extends PromptOptions { preferSteer?: boolean }
 export interface SettleOptions { maxIdleMs?: number }
 export interface SettleResult { stopReason: string; status: SessionStatus }
 export interface TaskOptions { taskId?: string; agent?: string; background?: boolean; model?: string }
+export type McpResourceAction = "list" | "templates" | "read" | "health";
+export interface McpResourceOptions { server?: string; uri?: string }
 
 export class SessionHandle {
   readonly client: DoMoCodeClient;
@@ -203,8 +205,18 @@ export class SessionHandle {
     return isRecord(value) && typeof value.message === "string" ? value.message : undefined;
   }
 
-  async tools(): Promise<ToolCatalogEntry[]> {
-    return decodeToolCatalog(await this.client.transport.json<unknown>(sessionPath(this.id, "/tools")));
+  async tools(filter: ToolCatalogFilter = {}): Promise<ToolCatalogEntry[]> {
+    return filterToolCatalog(decodeToolCatalog(await this.client.transport.json<unknown>(sessionPath(this.id, "/tools"))), filter);
+  }
+
+  /**
+   * Compatibility path for MCP resources on servers before the MCP admin routes.
+   * The server still owns MCP connections and returns its bounded direct-tool result.
+   */
+  async mcpResource(action: McpResourceAction, options: McpResourceOptions = {}): Promise<DirectToolResult> {
+    if (action === "read" && (!options.server || !options.uri)) throw new TypeError("mcp_resource read requires server and uri");
+    const argumentsValue: Record<string, JSONValue> = { action, ...(options.server === undefined ? {} : { server: options.server }), ...(options.uri === undefined ? {} : { uri: options.uri }) };
+    return this.executeTool("mcp_resource", argumentsValue);
   }
 
   async executeTool(name: string, argumentsValue: Record<string, JSONValue> = {}): Promise<DirectToolResult> {

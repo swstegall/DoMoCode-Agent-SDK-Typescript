@@ -1,6 +1,6 @@
 import type { Transport } from "./transport.ts";
 import { isRecord, requiredArray, requiredNumber, requiredString } from "./types/common.ts";
-import type { AgentProfileSummary, CatalogSource, CommandDescriptor, CommandKind, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, PromptResourceSource, ToolCatalogEntry, ToolPermissionState } from "./types/catalogs.ts";
+import type { AgentProfileSummary, CatalogSource, CommandDescriptor, CommandKind, CommandRegistry, MemoryRecord, ModelOption, ProjectMemoryRecord, PromptResourceSource, ToolCatalogEntry, ToolCatalogFilter, ToolPermissionState } from "./types/catalogs.ts";
 
 export interface ModelCatalogOptions { maxAgeMs?: number }
 
@@ -113,6 +113,17 @@ export function decodeToolCatalogEntry(value: unknown): ToolCatalogEntry {
 
 export function decodeToolCatalog(value: unknown): ToolCatalogEntry[] {
   return requiredArray(value, "tools").map(decodeToolCatalogEntry);
+}
+
+export function filterToolCatalog(tools: readonly ToolCatalogEntry[], filter: ToolCatalogFilter = {}): ToolCatalogEntry[] {
+  return tools.filter((tool) => {
+    if (filter.source !== undefined && tool.source !== filter.source) return false;
+    if (filter.permission !== undefined && tool.permission !== filter.permission) return false;
+    if (filter.mcpServer !== undefined && tool.metadata?.mcpServer !== filter.mcpServer) return false;
+    if (filter.mcpTransport !== undefined && tool.metadata?.mcpTransport !== filter.mcpTransport) return false;
+    if (!filter.includeHidden && tool.hiddenReason !== undefined) return false;
+    return true;
+  });
 }
 
 export function decodeMemoryRecords(value: unknown): MemoryRecord[] {

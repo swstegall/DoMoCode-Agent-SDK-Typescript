@@ -29,6 +29,7 @@ export interface MockDoMoServerOptions {
   autoComplete?: boolean;
   promptHandler?: (context: MockPromptContext) => Promise<MockPromptResult | void> | MockPromptResult | void;
   capabilities?: string[];
+  toolCatalog?: ToolCatalogEntry[];
 }
 
 interface SequencedEvent { sequence: number; event: ServerEvent }
@@ -87,6 +88,7 @@ export class MockDoMoServer {
   readonly fetch: FetchFunction;
   private readonly autoComplete: boolean;
   private readonly promptHandler: MockDoMoServerOptions["promptHandler"];
+  private readonly toolCatalog: ToolCatalogEntry[];
   private readonly sessionsById = new Map<string, MockSession>();
   private closed = false;
 
@@ -97,6 +99,7 @@ export class MockDoMoServer {
     this.capabilities = options.capabilities ?? ["session-events", "questions", "permissions", "client-ledger"];
     this.autoComplete = options.autoComplete ?? true;
     this.promptHandler = options.promptHandler;
+    this.toolCatalog = options.toolCatalog ?? [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
     this.fetch = this.handleFetch.bind(this);
   }
 
@@ -393,7 +396,7 @@ export class MockDoMoServer {
   }
 
   private tools(_session: MockSession): ToolCatalogEntry[] {
-    return [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }, permission: "allowed", metadata: { mock: true } }];
+    return this.toolCatalog;
   }
 
   private status(session: MockSession): SessionStatus {

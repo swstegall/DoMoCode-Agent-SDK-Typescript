@@ -3,6 +3,7 @@ import { Transport } from "../transport.ts";
 import type { ServerEvent } from "../types/events.ts";
 import type { Message } from "../types/messages.ts";
 import type { SessionRef } from "../types/sessions.ts";
+import type { ToolCatalogEntry } from "../types/catalogs.ts";
 export interface MockPromptContext {
     sessionId: string;
     prompt: string;
@@ -21,6 +22,7 @@ export interface MockDoMoServerOptions {
     autoComplete?: boolean;
     promptHandler?: (context: MockPromptContext) => Promise<MockPromptResult | void> | MockPromptResult | void;
     capabilities?: string[];
+    toolCatalog?: ToolCatalogEntry[];
 }
 /**
  * A deterministic, protocol-shaped in-process DoMoCode server.
@@ -38,6 +40,7 @@ export declare class MockDoMoServer {
     readonly fetch: FetchFunction;
     private readonly autoComplete;
     private readonly promptHandler;
+    private readonly toolCatalog;
     private readonly sessionsById;
     private closed;
     constructor(options?: MockDoMoServerOptions);

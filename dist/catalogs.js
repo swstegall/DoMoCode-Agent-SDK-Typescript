@@ -107,6 +107,21 @@ export function decodeToolCatalogEntry(value) {
 export function decodeToolCatalog(value) {
     return requiredArray(value, "tools").map(decodeToolCatalogEntry);
 }
+export function filterToolCatalog(tools, filter = {}) {
+    return tools.filter((tool) => {
+        if (filter.source !== undefined && tool.source !== filter.source)
+            return false;
+        if (filter.permission !== undefined && tool.permission !== filter.permission)
+            return false;
+        if (filter.mcpServer !== undefined && tool.metadata?.mcpServer !== filter.mcpServer)
+            return false;
+        if (filter.mcpTransport !== undefined && tool.metadata?.mcpTransport !== filter.mcpTransport)
+            return false;
+        if (!filter.includeHidden && tool.hiddenReason !== undefined)
+            return false;
+        return true;
+    });
+}
 export function decodeMemoryRecords(value) {
     return requiredArray(value, "memory").map(decodeProjectMemoryRecord);
 }

@@ -6,7 +6,7 @@ import { type JSONValue } from "./types/common.ts";
 import type { ContextSnapshot, DirectToolResult, GitDiff, RunResult, SessionAccounting, SessionClientAttachment, SessionClientEvent, SessionClientJournalEntry, SessionRef, SessionStatus, SessionTreeEntry, WorkspaceHistoryResult, WorkspaceSnapshotStatus } from "./types/sessions.ts";
 import type { DoMoCodeClient } from "./client.ts";
 import { InteractionRuntime, type InteractionHandler, type InteractionRuntimeOptions, type RuntimeInteraction } from "./interactionRuntime.ts";
-import type { ToolCatalogEntry } from "./types/catalogs.ts";
+import type { ToolCatalogEntry, ToolCatalogFilter } from "./types/catalogs.ts";
 import { type TranscriptOptions } from "./transcript.ts";
 import { SubagentRegistry, type SubagentRegistryOptions } from "./subagents.ts";
 export type AuthorityPreference = "require" | "prefer" | "observer";
@@ -34,6 +34,11 @@ export interface TaskOptions {
     agent?: string;
     background?: boolean;
     model?: string;
+}
+export type McpResourceAction = "list" | "templates" | "read" | "health";
+export interface McpResourceOptions {
+    server?: string;
+    uri?: string;
 }
 export declare class SessionHandle {
     readonly client: DoMoCodeClient;
@@ -84,7 +89,12 @@ export declare class SessionHandle {
     setLabel(targetId: string, label: string | null): Promise<void>;
     moveLeaf(targetId: string | null): Promise<void>;
     commitMessage(): Promise<string | undefined>;
-    tools(): Promise<ToolCatalogEntry[]>;
+    tools(filter?: ToolCatalogFilter): Promise<ToolCatalogEntry[]>;
+    /**
+     * Compatibility path for MCP resources on servers before the MCP admin routes.
+     * The server still owns MCP connections and returns its bounded direct-tool result.
+     */
+    mcpResource(action: McpResourceAction, options?: McpResourceOptions): Promise<DirectToolResult>;
     executeTool(name: string, argumentsValue?: Record<string, JSONValue>): Promise<DirectToolResult>;
     executeToolCommand(command: string): Promise<DirectToolResult>;
     task(prompt: string, options?: TaskOptions): Promise<DirectToolResult>;

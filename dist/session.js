@@ -6,7 +6,7 @@ import { isRecord, requiredArray, requiredBoolean, requiredNumber, requiredStrin
 import { asDecimalString } from "./types/decimal.js";
 import { AttachRejectedError, AuthorityUnavailableError, ConflictError, DoMoError, NotFoundError, RunStalledError, RunStateRaceError, SessionAlreadyAcquiredError, SessionBusyError } from "./types/errors.js";
 import { InteractionRuntime } from "./interactionRuntime.js";
-import { decodeToolCatalog } from "./catalogs.js";
+import { decodeToolCatalog, filterToolCatalog } from "./catalogs.js";
 import { renderTranscript } from "./transcript.js";
 import { SubagentRegistry } from "./subagents.js";
 export class SessionHandle {
@@ -181,8 +181,18 @@ export class SessionHandle {
         const value = await this.client.transport.json(sessionPath(this.id, "/diff/commit-message"), { method: "POST" });
         return isRecord(value) && typeof value.message === "string" ? value.message : undefined;
     }
-    async tools() {
-        return decodeToolCatalog(await this.client.transport.json(sessionPath(this.id, "/tools")));
+    async tools(filter = {}) {
+        return filterToolCatalog(decodeToolCatalog(await this.client.transport.json(sessionPath(this.id, "/tools"))), filter);
+    }
+    /**
+     * Compatibility path for MCP resources on servers before the MCP admin routes.
+     * The server still owns MCP connections and returns its bounded direct-tool result.
+     */
+    async mcpResource(action, options = {}) {
+        if (action === "read" && (!options.server || !options.uri))
+            throw new TypeError("mcp_resource read requires server and uri");
+        const argumentsValue = { action, ...(options.server === undefined ? {} : { server: options.server }), ...(options.uri === undefined ? {} : { uri: options.uri }) };
+        return this.executeTool("mcp_resource", argumentsValue);
     }
     async executeTool(name, argumentsValue = {}) {
         if (!/^[A-Za-z0-9_.:-]+$/.test(name))
