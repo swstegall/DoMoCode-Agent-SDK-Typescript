@@ -38,7 +38,19 @@ OpenAI-compatible streaming completions for a spawned `domo --serve` process.
 `scrubSecrets()` or `toJSON()` before writing captures to a fixture; authorization, token, API
 key, and similarly named fields are replaced with `[REDACTED]`.
 
+`FaultInjector` wraps a `FetchFunction` and deterministically fragments response bytes, delays
+chunks, or truncates a stream. It is useful for proving that an SSE consumer does not depend on
+network packet boundaries:
+
+```ts
+const fetch = new FaultInjector({ chunkSize: 1 }).fetch(server.fetch);
+const client = new DoMoCodeClient({ baseURL: server.baseURL, token: server.token, fetch });
+```
+
+The repository's property tests run the same invariants over dozens or hundreds of generated
+inputs without adding a runtime or test dependency: UTF-8 SSE boundaries, scientific decimal
+forms, UUIDv7 monotonicity, and recursive credential redaction.
+
 Fixtures are intentionally small and redacted. Add a fixture when a wire shape is part of the
 compatibility contract, then add it to the fixture decoder test. Unknown event fixtures should
 remain observable rather than becoming a closed-union failure.
-

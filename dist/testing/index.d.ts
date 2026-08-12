@@ -5,4 +5,5 @@ export * from "./mcp-stdio-server.ts";
 export * from "./mock-authorization-server.ts";
 export * from "./mock-do-mo-server-node.ts";
 export * from "./conformance.ts";
+export * from "./fault-injector.ts";
 //# sourceMappingURL=index.d.ts.map
