@@ -201,9 +201,14 @@ export class MockDoMoServer {
       if (method === "POST" && tail[0] === "diff" && tail[1] === "commit-message") return jsonResponse({ message: "Mock commit message" });
       if (method === "POST" && tail[0] === "client" && tail[1] === "attach") return this.attach(session, bodyObject(init));
       if (method === "POST" && tail[0] === "client" && tail[1] === "detach") return this.detach(session, bodyObject(init));
+      if (method === "POST" && tail[0] === "client" && tail[1] === "cursor") return this.advanceCursor(session, bodyObject(init));
+      if (method === "POST" && tail[0] === "client" && tail[1] === "authority" && tail[2] === "release") return this.releaseAuthority(session, bodyObject(init));
+      if (method === "POST" && tail[0] === "client" && tail[1] === "authority" && tail[2] === "transfer") return this.transferAuthority(session, bodyObject(init));
       if (method === "GET" && tail[0] === "clients") return jsonResponse([...session.clients.values()]);
       if (method === "GET" && tail[0] === "authority") return jsonResponse([...session.clients.values()].find((client) => client.role === "authority") ?? null);
       if (method === "GET" && tail[0] === "client" && tail[1] === "authority") return jsonResponse([...session.clients.values()].find((client) => client.role === "authority") ?? null);
+      if (method === "GET" && tail[0] === "client" && tail[1] === "events") return jsonResponse([]);
+      if (method === "GET" && tail[0] === "client" && tail[1] === "export") return jsonResponse([]);
       if (method === "POST" && tail[0] === "model") { if (!this.isAuthority(session, init)) return errorResponse(403, "authority required"); session.model = String(bodyObject(init).modelId ?? session.model); this.emit(session.ref.id, { type: "notice", notice: { level: "info", code: "model", text: session.model } }); return jsonResponse({}); }
       if (method === "POST" && tail[0] === "mode") { if (!this.isAuthority(session, init)) return errorResponse(403, "authority required"); session.mode = String(bodyObject(init).mode ?? session.mode); this.emit(session.ref.id, { type: "notice", notice: { level: "info", code: "mode", text: session.mode } }); return jsonResponse({}); }
       return errorResponse(404, "route not found");
@@ -338,6 +343,35 @@ export class MockDoMoServer {
     const existing = session.clients.get(clientId);
     if (existing) existing.active = false;
     return jsonResponse(existing ?? { clientId, owner: "", role: "observer", active: false });
+  }
+
+  private advanceCursor(session: MockSession, body: Record<string, unknown>): Response {
+    const clientId = typeof body.clientID === "string" ? body.clientID : "";
+    const attachment = session.clients.get(clientId);
+    if (!attachment) return errorResponse(404, "client not attached");
+    const sequence = typeof body.sequence === "number" && Number.isSafeInteger(body.sequence) ? body.sequence : attachment.eventCursor;
+    attachment.eventCursor = Math.max(attachment.eventCursor, sequence);
+    return jsonResponse(attachment);
+  }
+
+  private releaseAuthority(session: MockSession, body: Record<string, unknown>): Response {
+    const clientId = typeof body.clientID === "string" ? body.clientID : "";
+    const attachment = session.clients.get(clientId);
+    if (!attachment || attachment.role !== "authority") return errorResponse(403, "authority required");
+    attachment.role = "observer";
+    return jsonResponse(attachment);
+  }
+
+  private transferAuthority(session: MockSession, body: Record<string, unknown>): Response {
+    const fromClientId = typeof body.fromClientID === "string" ? body.fromClientID : "";
+    const toClientId = typeof body.toClientID === "string" ? body.toClientID : "";
+    const current = session.clients.get(fromClientId);
+    const target = session.clients.get(toClientId);
+    if (!current || current.role !== "authority" || !target) return errorResponse(403, "authority required");
+    current.role = "observer";
+    target.role = "authority";
+    target.active = true;
+    return jsonResponse(target);
   }
 
   private tools(_session: MockSession): ToolCatalogEntry[] {

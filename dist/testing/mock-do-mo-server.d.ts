@@ -65,6 +65,9 @@ export declare class MockDoMoServer {
     private fork;
     private attach;
     private detach;
+    private advanceCursor;
+    private releaseAuthority;
+    private transferAuthority;
     private tools;
     private status;
     private isAuthority;

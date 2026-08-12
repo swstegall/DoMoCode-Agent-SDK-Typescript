@@ -193,12 +193,22 @@ export class MockDoMoServer {
                 return this.attach(session, bodyObject(init));
             if (method === "POST" && tail[0] === "client" && tail[1] === "detach")
                 return this.detach(session, bodyObject(init));
+            if (method === "POST" && tail[0] === "client" && tail[1] === "cursor")
+                return this.advanceCursor(session, bodyObject(init));
+            if (method === "POST" && tail[0] === "client" && tail[1] === "authority" && tail[2] === "release")
+                return this.releaseAuthority(session, bodyObject(init));
+            if (method === "POST" && tail[0] === "client" && tail[1] === "authority" && tail[2] === "transfer")
+                return this.transferAuthority(session, bodyObject(init));
             if (method === "GET" && tail[0] === "clients")
                 return jsonResponse([...session.clients.values()]);
             if (method === "GET" && tail[0] === "authority")
                 return jsonResponse([...session.clients.values()].find((client) => client.role === "authority") ?? null);
             if (method === "GET" && tail[0] === "client" && tail[1] === "authority")
                 return jsonResponse([...session.clients.values()].find((client) => client.role === "authority") ?? null);
+            if (method === "GET" && tail[0] === "client" && tail[1] === "events")
+                return jsonResponse([]);
+            if (method === "GET" && tail[0] === "client" && tail[1] === "export")
+                return jsonResponse([]);
             if (method === "POST" && tail[0] === "model") {
                 if (!this.isAuthority(session, init))
                     return errorResponse(403, "authority required");
@@ -356,6 +366,35 @@ export class MockDoMoServer {
         if (existing)
             existing.active = false;
         return jsonResponse(existing ?? { clientId, owner: "", role: "observer", active: false });
+    }
+    advanceCursor(session, body) {
+        const clientId = typeof body.clientID === "string" ? body.clientID : "";
+        const attachment = session.clients.get(clientId);
+        if (!attachment)
+            return errorResponse(404, "client not attached");
+        const sequence = typeof body.sequence === "number" && Number.isSafeInteger(body.sequence) ? body.sequence : attachment.eventCursor;
+        attachment.eventCursor = Math.max(attachment.eventCursor, sequence);
+        return jsonResponse(attachment);
+    }
+    releaseAuthority(session, body) {
+        const clientId = typeof body.clientID === "string" ? body.clientID : "";
+        const attachment = session.clients.get(clientId);
+        if (!attachment || attachment.role !== "authority")
+            return errorResponse(403, "authority required");
+        attachment.role = "observer";
+        return jsonResponse(attachment);
+    }
+    transferAuthority(session, body) {
+        const fromClientId = typeof body.fromClientID === "string" ? body.fromClientID : "";
+        const toClientId = typeof body.toClientID === "string" ? body.toClientID : "";
+        const current = session.clients.get(fromClientId);
+        const target = session.clients.get(toClientId);
+        if (!current || current.role !== "authority" || !target)
+            return errorResponse(403, "authority required");
+        current.role = "observer";
+        target.role = "authority";
+        target.active = true;
+        return jsonResponse(target);
     }
     tools(_session) {
         return [{ name: "read", description: "Read a file", source: "builtIn", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } }];
