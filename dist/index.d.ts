@@ -9,6 +9,7 @@ export * from "./sse.ts";
 export * from "./eventEngine.ts";
 export * from "./client.ts";
 export * from "./catalogs.ts";
+export * from "./workflows.ts";
 export * from "./session.ts";
 export * from "./interactionRuntime.ts";
 export * from "./transcript.ts";

@@ -2,12 +2,14 @@ import { Transport, type TransportOptions } from "./transport.ts";
 import type { ServerCapabilities, SessionRef, SessionSummary } from "./types/sessions.ts";
 import { SessionHandle, type SessionAcquireOptions, type SessionAttachOptions } from "./session.ts";
 import { CatalogClient } from "./catalogs.ts";
+import { WorkflowClient } from "./workflows.ts";
 export interface DoMoCodeClientOptions extends TransportOptions {
 }
 export declare class DoMoCodeClient {
     readonly transport: Transport;
     readonly sessions: SessionRegistry;
     readonly catalogs: CatalogClient;
+    readonly workflows: WorkflowClient;
     constructor(options: DoMoCodeClientOptions);
     get baseURL(): string;
     get clientId(): string;

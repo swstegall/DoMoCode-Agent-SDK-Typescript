@@ -3,14 +3,17 @@ import { NotFoundError, SessionAlreadyAcquiredError } from "./types/errors.js";
 import { SessionHandle } from "./session.js";
 import { isRecord, requiredString } from "./types/common.js";
 import { CatalogClient } from "./catalogs.js";
+import { WorkflowClient } from "./workflows.js";
 export class DoMoCodeClient {
     transport;
     sessions;
     catalogs;
+    workflows;
     constructor(options) {
         this.transport = new Transport(options);
         this.sessions = new SessionRegistry(this);
         this.catalogs = new CatalogClient(this.transport);
+        this.workflows = new WorkflowClient(this.transport);
     }
     get baseURL() { return this.transport.baseURL; }
     get clientId() { return this.transport.clientId; }
