@@ -6,6 +6,7 @@ import { isRecord, requiredString } from "./types/common.ts";
 import { CatalogClient } from "./catalogs.ts";
 import { WorkflowClient } from "./workflows.ts";
 import { JobClient } from "./jobs.ts";
+import { HandoffClient } from "./handoffs.ts";
 
 export interface DoMoCodeClientOptions extends TransportOptions {}
 
@@ -15,6 +16,7 @@ export class DoMoCodeClient {
   readonly catalogs: CatalogClient;
   readonly workflows: WorkflowClient;
   readonly jobs: JobClient;
+  readonly handoffs: HandoffClient;
 
   constructor(options: DoMoCodeClientOptions) {
     this.transport = new Transport(options);
@@ -22,6 +24,7 @@ export class DoMoCodeClient {
     this.catalogs = new CatalogClient(this.transport);
     this.workflows = new WorkflowClient(this.transport);
     this.jobs = new JobClient(this.transport);
+    this.handoffs = new HandoffClient(this.transport);
   }
 
   get baseURL(): string { return this.transport.baseURL; }

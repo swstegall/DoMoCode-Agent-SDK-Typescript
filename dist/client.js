@@ -5,18 +5,21 @@ import { isRecord, requiredString } from "./types/common.js";
 import { CatalogClient } from "./catalogs.js";
 import { WorkflowClient } from "./workflows.js";
 import { JobClient } from "./jobs.js";
+import { HandoffClient } from "./handoffs.js";
 export class DoMoCodeClient {
     transport;
     sessions;
     catalogs;
     workflows;
     jobs;
+    handoffs;
     constructor(options) {
         this.transport = new Transport(options);
         this.sessions = new SessionRegistry(this);
         this.catalogs = new CatalogClient(this.transport);
         this.workflows = new WorkflowClient(this.transport);
         this.jobs = new JobClient(this.transport);
+        this.handoffs = new HandoffClient(this.transport);
     }
     get baseURL() { return this.transport.baseURL; }
     get clientId() { return this.transport.clientId; }

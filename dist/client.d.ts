@@ -4,6 +4,7 @@ import { SessionHandle, type SessionAcquireOptions, type SessionAttachOptions } 
 import { CatalogClient } from "./catalogs.ts";
 import { WorkflowClient } from "./workflows.ts";
 import { JobClient } from "./jobs.ts";
+import { HandoffClient } from "./handoffs.ts";
 export interface DoMoCodeClientOptions extends TransportOptions {
 }
 export declare class DoMoCodeClient {
@@ -12,6 +13,7 @@ export declare class DoMoCodeClient {
     readonly catalogs: CatalogClient;
     readonly workflows: WorkflowClient;
     readonly jobs: JobClient;
+    readonly handoffs: HandoffClient;
     constructor(options: DoMoCodeClientOptions);
     get baseURL(): string;
     get clientId(): string;
